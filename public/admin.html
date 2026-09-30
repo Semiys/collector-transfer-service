@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Админ-панель — Хаб Коллекционера</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 1.5rem; background: #f4f6fa; color: #20243a; }
+    main { max-width: 55rem; margin: 1rem auto; padding: 2rem; background: white; border-radius: 1rem; }
+    h1 { margin-top: 0; }
+    p { line-height: 1.5; }
+    form, .panel { border: 1px solid #d9e0ea; border-radius: .8rem; padding: 1.2rem; margin-top: 1rem; }
+    label { display: grid; gap: .35rem; margin-bottom: .8rem; font-weight: 600; }
+    input, button, select, textarea { font: inherit; }
+    input:not([type="checkbox"]), select, textarea { width: 100%; border: 1px solid #aeb9c9; border-radius: .5rem; padding: .6rem; }
+    textarea { min-height: 10rem; resize: vertical; }
+    button { border: 0; border-radius: .5rem; padding: .65rem 1rem; background: #3753a7; color: white; cursor: pointer; }
+    button:disabled { opacity: .55; cursor: wait; }
+    .secondary { background: #536179; }
+    .danger { background: #a42b35; }
+    .check { display: flex; align-items: flex-start; gap: .5rem; font-weight: 400; }
+    .error { color: #a42b35; }
+    .success { color: #176842; }
+    .account { border-top: 1px solid #e3e8ef; padding: 1rem 0; }
+    .account:first-child { border-top: 0; }
+    .account p { margin: .3rem 0; }
+    .actions { display: flex; gap: .5rem; margin-top: .7rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Ключи OpenRouter</h1>
+    <p>Добавляйте только API-ключи владельцев, которые согласились участвовать. Логины и пароли не нужны. Ключи сохраняются в зашифрованном файле, а в списке видны только последние четыре символа.</p>
+    <p>Один выбранный ключ используется для распознавания текста. Результат нужно проверить перед созданием ZIP.</p>
+
+    <section class="panel">
+      <label for="admin-token">Админ-токен сервера
+        <input id="admin-token" type="password" autocomplete="off" spellcheck="false">
+      </label>
+      <button id="load" type="button">Открыть список</button>
+      <p id="status" role="status" aria-live="polite"></p>
+    </section>
+
+    <form id="add-form">
+      <h2>Добавить ключ</h2>
+      <label for="owner">Имя владельца
+        <input id="owner" maxlength="80" required>
+      </label>
+      <label for="label">Название ключа
+        <input id="label" maxlength="80" required placeholder="Например, ключ Ивана для сервиса">
+      </label>
+      <label for="api-key">API-ключ OpenRouter
+        <input id="api-key" type="password" autocomplete="off" spellcheck="false" required>
+      </label>
+      <label class="check"><input id="consent" type="checkbox" required> Владелец согласился передать этот API-ключ для работы сервиса</label>
+      <button type="submit">Сохранить ключ</button>
+    </form>
+
+    <section class="panel">
+      <h2>Сохранённые ключи</h2>
+      <div id="accounts"></div>
+    </section>
+
+    <form id="ai-form">
+      <h2>Распознать свободный текст</h2>
+      <p>Для проверки вставьте небольшой список моделей или сообщения из Telegram. Текст будет отправлен выбранной бесплатной модели через OpenRouter. Если в нём есть личные данные, сначала удалите их.</p>
+      <label for="ai-account">Ключ для этого запроса
+        <select id="ai-account" required><option value="">Сначала откройте список ключей</option></select>
+      </label>
+      <label for="ai-text">Текст коллекции
+        <textarea id="ai-text" minlength="10" maxlength="20000" required></textarea>
+      </label>
+      <button type="submit">Распознать текст</button>
+      <p id="ai-status" role="status" aria-live="polite"></p>
+      <button id="ai-review" type="button" class="secondary" hidden>Проверить модели и подготовить ZIP</button>
+    </form>
+  </main>
+  <script src="/admin.js" defer></script>
+</body>
+</html>

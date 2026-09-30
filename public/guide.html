@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Бесплатный перенос через DeepSeek — Хаб Коллекционера</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 1rem; background: #f4f6fa; color: #20243a; }
+    main { width: min(100%, 52rem); margin: 1rem auto; padding: clamp(1.2rem, 4vw, 2.5rem); background: white; border-radius: 1.2rem; box-shadow: 0 12px 40px #20243a12; }
+    h1 { margin: .5rem 0; font-size: clamp(1.7rem, 5vw, 2.3rem); }
+    h2 { margin: 0 0 .7rem; font-size: 1.25rem; }
+    p, li { line-height: 1.55; }
+    li + li { margin-top: .45rem; }
+    a { color: #304ca7; }
+    .intro { color: #536179; }
+    .step { margin-top: 1.3rem; padding: 1.2rem; border: 1px solid #d9e0ea; border-radius: .9rem; }
+    .step-number { display: inline-grid; place-items: center; width: 2rem; height: 2rem; margin-right: .45rem; border-radius: 50%; background: #3753a7; color: white; font-weight: 700; }
+    .hint { padding: .8rem 1rem; border-left: .25rem solid #3753a7; background: #f2f5fd; }
+    .important { padding: .8rem 1rem; border-left: .25rem solid #ad6224; background: #fff7eb; }
+    textarea { width: 100%; min-height: 22rem; padding: .8rem; border: 1px solid #aeb9c9; border-radius: .5rem; resize: vertical; font: .9rem/1.45 ui-monospace, monospace; color: #20243a; background: #fafbfe; }
+    button, .action { display: inline-block; margin-top: .7rem; padding: .7rem 1rem; border: 0; border-radius: .55rem; background: #3753a7; color: white; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }
+    button:hover, .action:hover { background: #293f82; }
+    pre { overflow-x: auto; padding: .8rem; background: #f4f6fa; border-radius: .5rem; font-size: .85rem; }
+    details { margin-top: .7rem; padding: .7rem; border: 1px solid #d9e0ea; border-radius: .5rem; }
+    summary { cursor: pointer; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="/">← На страницу переноса</a></p>
+    <h1>Перенести коллекцию бесплатно с помощью DeepSeek</h1>
+    <p class="intro">Подойдёт для таблицы Excel, CSV, текстового списка или скопированных сообщений. DeepSeek поможет привести записи к одному виду. Наш сервис проверит результат и сделает ZIP для приложения DomCollection.</p>
+    <p class="hint"><strong>Есть обычная таблица Excel или CSV?</strong> Сначала попробуйте <a href="/">загрузить её напрямую</a>. DeepSeek нужен, если таблица устроена необычно или данные записаны свободным текстом.</p>
+    <p class="hint"><strong>Весь путь:</strong> скопировать промпт → добавить свои данные в DeepSeek → скопировать JSON-ответ → вставить его на странице переноса → проверить модели → скачать ZIP.</p>
+
+    <section class="step">
+      <h2><span class="step-number">1</span>Подготовьте небольшой кусок коллекции</h2>
+      <ol>
+        <li>Если у вас Excel или CSV, откройте таблицу. Выделите строку с названиями столбцов и несколько строк с моделями, затем скопируйте их. На Windows это <strong>Ctrl+C</strong>.</li>
+        <li>Если у вас TXT или список в Telegram, скопируйте сообщения, где перечислены модели. Личную переписку, адреса и номера телефонов лучше убрать до отправки в сторонний сервис.</li>
+        <li>Для первой проверки возьмите <strong>3–5 моделей</strong>. Когда убедитесь, что всё правильно, переносите следующую часть. Длинный список удобнее делить примерно на 20–50 моделей за один ответ DeepSeek, чтобы ответ не оборвался.</li>
+      </ol>
+      <p>Один ZIP сейчас содержит не более <strong>300 моделей</strong>. Если моделей больше, делайте несколько частей без повторяющихся строк. Импорт одной и той же части дважды создаст дубликаты.</p>
+    </section>
+
+    <section class="step">
+      <h2><span class="step-number">2</span>Скопируйте готовый запрос</h2>
+      <p>Нажмите кнопку ниже. Откройте <a href="https://chat.deepseek.com/" target="_blank" rel="noopener noreferrer">официальный чат DeepSeek</a>, войдите в аккаунт при необходимости и вставьте запрос в поле сообщения. На Windows вставка — <strong>Ctrl+V</strong>.</p>
+      <textarea id="prompt" readonly aria-label="Готовый запрос для DeepSeek">Ты помогаешь перенести список коллекционных моделей в приложение DomCollection. Преобразуй данные после строки «ДАННЫЕ КОЛЛЕКЦИИ» в JSON.
+
+Верни только один корректный JSON-массив. Не добавляй объяснений, заголовков и текста после него. Один объект массива = одна модель. У каждого объекта должны быть ровно эти поля:
+"name" — название модели вместе с кодом, если код есть;
+"brand" — бренд или производитель модели;
+"scale" — масштаб, например "1:64";
+"category" — категория, если она указана;
+"price" — цена покупки только числом, например "550" или "7.30";
+"purchaseDate" — именно дата покупки в формате ГГГГ-ММ-ДД;
+"notes" — другие полезные сведения из исходной записи;
+"photoUrl" — прямая ссылка на личное фото из Hunt64, если она явно есть.
+
+Все значения должны быть строками. Если значение неизвестно, напиши пустую строку "". Ничего не придумывай. Не считай дату добавления в сервис датой покупки. Если цены указаны в разных валютах, оставь поле price пустым и сохрани исходную цену с валютой в notes. Если фото нет или это ссылка не на личное фото Hunt64, оставь photoUrl пустым. Заголовки разделов и пустые строки не превращай в отдельные модели. Сохрани все реальные модели из переданного кусочка; не добавляй новые.
+
+Пример одной записи в ответе:
+{"name":"A01 Classic Bird","brand":"Hot Wheels","scale":"1:64","category":"Автомобили","price":"550","purchaseDate":"","notes":"Синий цвет","photoUrl":""}
+
+ДАННЫЕ КОЛЛЕКЦИИ:
+</textarea>
+      <button id="copy-prompt" type="button">Скопировать запрос</button>
+      <p id="copy-status" role="status" aria-live="polite"></p>
+      <p class="important"><strong>Важно:</strong> после строки «ДАННЫЕ КОЛЛЕКЦИИ:» вставьте скопированные строки своей коллекции и только потом отправьте сообщение DeepSeek. Без ваших строк нейросети нечего преобразовывать.</p>
+    </section>
+
+    <section class="step">
+      <h2><span class="step-number">3</span>Скопируйте ответ DeepSeek</h2>
+      <p>Дождитесь полного ответа. Он должен начинаться с <code>[</code> и заканчиваться <code>]</code>. Скопируйте весь JSON — текст внутри этих скобок. Если DeepSeek поместил его в блок с пометкой <code>json</code>, можно скопировать блок целиком: сайт уберёт эту обёртку.</p>
+      <p>Сравните число записей в ответе с числом моделей, которые вы отправили. Если ответ оборвался, не используйте его: отправьте меньшую часть списка. Если DeepSeek написал обычный текст вместо JSON, попросите его: «Повтори ответ только как корректный JSON-массив без пояснений».</p>
+    </section>
+
+    <section class="step">
+      <h2><span class="step-number">4</span>Проверьте данные и скачайте ZIP</h2>
+      <ol>
+        <li>Вернитесь <a href="/">на страницу переноса</a>. Вставьте ответ в поле «Или вставьте текст / JSON из DeepSeek».</li>
+        <li>Нажмите <strong>«Проверить JSON из DeepSeek»</strong>. Появится таблица распознанных моделей.</li>
+        <li>Проверьте число моделей, названия, бренд, масштаб, категорию, цену, дату и заметки. Выберите валюту цен: рубли или евро. Если DeepSeek ошибся, исправьте ответ в чате и вставьте новый JSON.</li>
+        <li>Подтвердите предупреждение о проверке ИИ и нажмите <strong>«Скачать ZIP для DomCollection»</strong>. Сервис создаст нужный архив сам: вручную упаковывать JSON не надо.</li>
+      </ol>
+      <a class="action" href="/">Открыть страницу переноса</a>
+      <p class="hint">Если цена отсутствует, в приложении будет 0 ₽ с пометкой в заметках. Если нет даты покупки, будет дата переноса с пометкой. Если нет доступного фото, появится заглушка. Перед скачиванием обратите на это внимание.</p>
+    </section>
+
+    <section class="step">
+      <h2><span class="step-number">5</span>Импортируйте ZIP в приложение</h2>
+      <ol>
+        <li>Передайте скачанный файл <code>dom_collection_transfer.zip</code> на телефон любым удобным способом. Не распаковывайте и не перепаковывайте его.</li>
+        <li>В DomCollection откройте <strong>«Профиль» → «Импорт коллекции»</strong> и выберите этот ZIP.</li>
+        <li>После импорта проверьте несколько моделей, особенно цены и фотографии.</li>
+      </ol>
+    </section>
+
+    <section class="step">
+      <h2>Если что-то не получилось</h2>
+      <details><summary>Сайт пишет, что JSON не читается</summary><p>Скопируйте ответ полностью: от первой квадратной скобки <code>[</code> до последней <code>]</code>. Проверьте, что DeepSeek дописал ответ до конца. Если нет — попросите обработать меньшую часть списка.</p></details>
+      <details><summary>Сайт нашёл меньше моделей, чем должно быть</summary><p>Не скачивайте ZIP. Сравните исходные строки с ответом DeepSeek. Повторите запрос с меньшей частью и явно укажите, какие модели пропущены.</p></details>
+      <details><summary>Валюта или цена неверна</summary><p>В одном переносе выберите одну валюту. Для списка со смешанными валютами разделите модели по валютам на разные части. Проверьте цену до скачивания ZIP.</p></details>
+      <details><summary>Фотографии не перенеслись</summary><p>Сейчас сервис умеет получать личные фото по ссылкам Hunt64. Встроенные в Excel картинки и файлы фото из сообщений DeepSeek не передаёт в ZIP. Для таких моделей добавляется заглушка; фото можно добавить в приложении позже.</p></details>
+      <details><summary>Моделей больше 300</summary><p>Разделите коллекцию на несколько частей. Для каждой получите отдельный JSON и ZIP, затем импортируйте архивы по одному. Не повторяйте одну и ту же модель в разных частях.</p></details>
+    </section>
+  </main>
+  <script>
+    document.getElementById('copy-prompt').addEventListener('click', () => {
+      const prompt = document.getElementById('prompt');
+      const status = document.getElementById('copy-status');
+      prompt.select();
+      try {
+        if (!document.execCommand('copy')) throw new Error('clipboard unavailable');
+        status.textContent = 'Запрос скопирован. Вставьте его в DeepSeek и добавьте свои данные в конце.';
+      } catch {
+        status.textContent = 'Не удалось скопировать автоматически. Скопируйте выделенный текст вручную (Ctrl+C).';
+      }
+    });
+  </script>
+</body>
+</html>

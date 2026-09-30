@@ -1,25 +1,244 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="ru">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Хаб Коллекционера — сервис переноса коллекций</title>
+  <title>Хаб Коллекционера — перенос коллекций</title>
   <style>
     :root { color-scheme: light; font-family: system-ui, sans-serif; }
-    body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: #f4f6fa; color: #20243a; }
-    main { max-width: 46rem; margin: 1.5rem; padding: 2.5rem; border-radius: 1.5rem; background: white; box-shadow: 0 12px 40px #20243a12; }
+    * { box-sizing: border-box; }
+    body { min-height: 100vh; margin: 0; padding: 1.5rem; background: #f4f6fa; color: #20243a; }
+    main { width: min(100%, 62rem); margin: 2rem auto; padding: clamp(1.2rem, 4vw, 2.5rem); border-radius: 1.5rem; background: white; box-shadow: 0 12px 40px #20243a12; }
     h1 { margin: 0 0 1rem; font-size: clamp(1.8rem, 5vw, 2.6rem); }
-    p { margin: .8rem 0; line-height: 1.5; }
+    h2 { margin-top: 2rem; }
+    p { line-height: 1.5; }
     .version { color: #536179; }
-    .status { color: #3753a7; font-weight: 600; }
+    .panel { border: 1px solid #d9e0ea; border-radius: 1rem; padding: 1.2rem; margin-top: 1.5rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
+    label { display: grid; gap: .35rem; font-weight: 600; }
+    input, select, textarea, button { font: inherit; }
+    input, select, textarea { width: 100%; border: 1px solid #aeb9c9; border-radius: .6rem; padding: .6rem; background: white; color: #20243a; }
+    textarea { min-height: 8rem; resize: vertical; }
+    input[type="checkbox"] { width: auto; }
+    button { border: 0; border-radius: .7rem; padding: .8rem 1.2rem; background: #3753a7; color: white; font-weight: 700; cursor: pointer; }
+    button:disabled { opacity: .55; cursor: wait; }
+    .note { color: #536179; font-size: .92rem; }
+    .status { min-height: 1.5rem; font-weight: 600; }
+    .error { color: #a42b35; }
+    .success { color: #176842; }
+    .hidden { display: none; }
+    .scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; margin-top: .8rem; }
+    th, td { padding: .65rem; text-align: left; border-bottom: 1px solid #e3e8ef; }
+    th { white-space: nowrap; }
   </style>
 </head>
 <body>
   <main>
-    <h1>Хаб Коллекционера — сервис переноса коллекций</h1>
-    <p>Помогает перенести записи из таблиц, текстовых файлов и скопированных сообщений в мобильное приложение.</p>
-    <p class="version">Версия 0.0.1</p>
-    <p class="status">Разработка продолжается</p>
+    <h1>Хаб Коллекционера — перенос коллекций</h1>
+    <p>Загрузите таблицу, проверьте соответствие столбцов и скачайте ZIP для импорта в DomCollection. Файлы обрабатываются при запросе и не сохраняются в сервисе.</p>
+    <p class="version">Версия 0.1 · CSV, XLSX, JSON и структурированный TXT · до 300 моделей и 8 МБ входного файла</p>
+    <p class="note"><a href="/guide">Пошаговая бесплатная инструкция с готовым промптом для DeepSeek</a></p>
+    <p class="note">Для пробного распознавания свободного текста через OpenRouter откройте <a href="/admin">админ-панель</a>.</p>
+
+    <section class="panel">
+      <label for="source-file">Файл коллекции
+        <input id="source-file" type="file" accept=".csv,.xlsx,.json,.txt">
+      </label>
+      <p class="note">Можно вставить структурированный список вида «A01 Название — описание». Для текста из Telegram используйте <a href="/guide">бесплатную инструкцию</a>.</p>
+      <label for="source-text">Или вставьте текст / JSON из DeepSeek
+        <textarea id="source-text" placeholder="Структурированный список или JSON, который выдал DeepSeek"></textarea>
+      </label>
+      <p><button id="parse-text" type="button">Разобрать список</button> <button id="parse-json" type="button">Проверить JSON из DeepSeek</button></p>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="review" class="hidden">
+      <h2>Проверьте перенос</h2>
+      <p id="summary"></p>
+      <div id="text-warnings" class="panel hidden">
+        <strong>Неоднозначные строки</strong>
+        <ul id="warning-list"></ul>
+        <label><input id="accept-warnings" type="checkbox"> Я проверил эти строки и согласен продолжить</label>
+      </div>
+      <div id="mappings" class="grid panel"></div>
+
+      <div class="grid panel">
+        <label for="currency">Валюта цены в исходном файле
+          <select id="currency"><option value="">Выберите валюту</option><option value="RUB">Рубли (RUB)</option><option value="EUR">Евро (EUR)</option></select>
+        </label>
+        <label for="category">Категория для строк без категории
+          <input id="category" type="text" value="Без категории" maxlength="100">
+        </label>
+      </div>
+      <p class="note">Если в источнике нет даты покупки, будет указана сегодняшняя дата переноса с пометкой в заметках. Дата добавления в Hunt64 не считается датой покупки.</p>
+      <p id="rate" class="note"></p>
+      <p class="note">Берём только столбец с личным фото. Сейчас ссылки Hunt64 поддерживаются автоматически; WebP преобразуется в JPG. Недоступное фото заменяется заглушкой с пометкой. Импорт в приложении добавляет модели, а не ищет дубликаты.</p>
+      <div class="scroll"><table><thead><tr><th>Название</th><th>Бренд</th><th>Масштаб</th><th>Категория</th><th>Цена</th><th>Дата покупки</th><th>Заметки</th><th>Ссылка на фото</th></tr></thead><tbody id="preview-rows"></tbody></table></div>
+      <p><button id="download" type="button">Скачать ZIP для DomCollection</button></p>
+    </section>
   </main>
+  <script>
+    const fields = { name: 'Название модели', brand: 'Бренд', scale: 'Масштаб', category: 'Категория', price: 'Цена покупки', purchaseDate: 'Дата покупки', notes: 'Заметки', photoUrl: 'Ссылка на личное фото' };
+    const fileInput = document.getElementById('source-file');
+    const textInput = document.getElementById('source-text');
+    const review = document.getElementById('review');
+    const mappings = document.getElementById('mappings');
+    const status = document.getElementById('status');
+    const currency = document.getElementById('currency');
+    const rate = document.getElementById('rate');
+    const download = document.getElementById('download');
+    let preview;
+    let eurRate;
+    let selectedFile;
+
+    function showStatus(message, type = '') {
+      status.textContent = message;
+      status.className = `status ${type}`;
+    }
+    function mapping() {
+      return Object.fromEntries(Object.keys(fields).map((field) => [field, document.getElementById(`field-${field}`).value]));
+    }
+    function renderRows() {
+      const selected = mapping();
+      const body = document.getElementById('preview-rows');
+      body.replaceChildren();
+      for (const row of preview.rows) {
+        const tr = document.createElement('tr');
+        for (const field of ['name', 'brand', 'scale', 'category', 'price', 'purchaseDate', 'notes', 'photoUrl']) {
+          const td = document.createElement('td');
+          const value = row[selected[field]] || '';
+          td.textContent = value || '—';
+          tr.append(td);
+        }
+        body.append(tr);
+      }
+    }
+    async function updateRate() {
+      eurRate = null;
+      rate.textContent = '';
+      if (currency.value !== 'EUR') return;
+      rate.textContent = 'Получаю курс ЦБ…';
+      try {
+        const response = await fetch('/api/rates/eur');
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error);
+        eurRate = data;
+        rate.replaceChildren();
+        rate.append(document.createTextNode(`Курс на ${data.date}: 1 EUR = ${data.rubPerEuro} ₽. `));
+        const link = document.createElement('a');
+        link.href = data.source; link.textContent = 'Источник: Банк России'; link.target = '_blank'; link.rel = 'noopener noreferrer';
+        rate.append(link);
+      } catch (error) { rate.textContent = `Не удалось получить курс: ${error.message}`; }
+    }
+
+    async function preparePreview(file) {
+      review.classList.add('hidden'); preview = null; eurRate = null;
+      selectedFile = file;
+      if (!file) return;
+      showStatus('Читаю файл…');
+      const form = new FormData(); form.append('file', file);
+      try {
+        const response = await fetch('/api/preview', { method: 'POST', body: form });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error);
+        preview = data;
+        document.getElementById('summary').textContent = `Найдено моделей: ${data.rowCount}. Ниже показаны ${data.rows.length === data.rowCount ? 'все записи' : `первые ${data.rows.length}`}. ${data.type === 'ai-json' ? 'Результат создан ИИ: проверьте каждую строку, особенно цену, валюту и дату покупки.' : ''}`;
+        const warningsPanel = document.getElementById('text-warnings');
+        const warningList = document.getElementById('warning-list');
+        warningList.replaceChildren();
+        document.getElementById('accept-warnings').checked = false;
+        warningsPanel.classList.toggle('hidden', !data.warnings?.length);
+        for (const warning of data.warnings ?? []) {
+          const item = document.createElement('li');
+          item.textContent = `${warning.line === 'ИИ' ? 'ИИ' : `Строка ${warning.line}`}: ${warning.text}`;
+          warningList.append(item);
+        }
+        mappings.replaceChildren();
+        for (const [field, labelText] of Object.entries(fields)) {
+          const label = document.createElement('label'); label.htmlFor = `field-${field}`; label.textContent = labelText;
+          const select = document.createElement('select'); select.id = `field-${field}`;
+          for (const header of ['', ...data.headers]) {
+            const option = document.createElement('option'); option.value = header; option.textContent = header || 'Нет столбца'; select.append(option);
+          }
+          select.value = data.mapping[field] || '';
+          select.addEventListener('change', () => {
+            renderRows();
+            if (field === 'price') {
+              const header = select.value;
+              currency.value = /EUR|€|евро/i.test(header) ? 'EUR' : /RUB|₽|руб/i.test(header) ? 'RUB' : '';
+              updateRate();
+            }
+          });
+          label.append(select); mappings.append(label);
+        }
+        currency.value = data.priceCurrency === 'UNKNOWN' ? '' : data.priceCurrency;
+        renderRows(); review.classList.remove('hidden'); showStatus('Проверьте столбцы и модели.');
+        await updateRate();
+      } catch (error) { showStatus(error.message, 'error'); }
+    }
+    fileInput.addEventListener('change', () => preparePreview(fileInput.files[0]));
+    const aiImport = sessionStorage.getItem('collector-ai-import');
+    if (aiImport) {
+      sessionStorage.removeItem('collector-ai-import');
+      preparePreview(new File([aiImport], 'recognized-collection.json', { type: 'application/json' }));
+    }
+    document.getElementById('parse-text').addEventListener('click', () => {
+      const text = textInput.value.trim();
+      if (!text) { showStatus('Вставьте текстовый список.', 'error'); return; }
+      preparePreview(new File([text], 'pasted.txt', { type: 'text/plain' }));
+    });
+    document.getElementById('parse-json').addEventListener('click', () => {
+      let text = textInput.value.trim();
+      if (!text) { showStatus('Вставьте ответ DeepSeek с JSON.', 'error'); return; }
+      const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      if (fenced) text = fenced[1].trim();
+      let source;
+      try { source = JSON.parse(text); }
+      catch { showStatus('Не удалось прочитать JSON. Скопируйте весь блок от первой [ или { до последней ] или }.', 'error'); return; }
+      const models = Array.isArray(source) ? source : source?.models;
+      if (!Array.isArray(models) || models.length === 0) {
+        showStatus('В JSON нужен непустой список моделей: [ ... ] или { "models": [ ... ] }.', 'error'); return;
+      }
+      if (models.length > 300) { showStatus('В одном ZIP может быть не более 300 моделей. Разделите список на части.', 'error'); return; }
+      if (models.some((model) => !model || typeof model !== 'object' || Array.isArray(model) ||
+        typeof model.name !== 'string' || !model.name.trim())) {
+        showStatus('У каждой модели должно быть заполнено поле "name". Попросите DeepSeek исправить JSON.', 'error'); return;
+      }
+      const wrapped = { transferSource: 'manual-ai-v1', models, warnings: [] };
+      preparePreview(new File([JSON.stringify(wrapped)], 'deepseek-result.json', { type: 'application/json' }));
+    });
+    currency.addEventListener('change', updateRate);
+
+    download.addEventListener('click', async () => {
+      if (!preview) return;
+      if (!mapping().name) { showStatus('Выберите столбец с названием модели.', 'error'); return; }
+      if (!currency.value) { showStatus('Выберите валюту цены.', 'error'); return; }
+      if (currency.value === 'EUR' && !eurRate) { showStatus('Дождитесь курса ЦБ.', 'error'); return; }
+      if (preview.warnings?.length && !document.getElementById('accept-warnings').checked) {
+        showStatus('Проверьте неоднозначные строки и подтвердите перенос.', 'error'); return;
+      }
+      download.disabled = true; showStatus('Собираю архив и загружаю личные фото…');
+      const form = new FormData();
+      form.append('file', selectedFile);
+      form.append('mapping', JSON.stringify(mapping()));
+      const now = new Date();
+      const transferDate = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+      form.append('options', JSON.stringify({ priceCurrency: currency.value, defaultCategory: document.getElementById('category').value,
+        transferDate, expectedRateDate: eurRate?.date,
+        acceptTextWarnings: !preview.warnings?.length || document.getElementById('accept-warnings').checked }));
+      try {
+        const response = await fetch('/api/convert', { method: 'POST', body: form });
+        if (!response.ok) { const data = await response.json(); throw new Error(data.error); }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'dom_collection_transfer.zip'; anchor.click();
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        const failed = response.headers.get('X-Photo-Failed-Rows');
+        showStatus(failed ? `ZIP готов. Фото не загрузились в строках: ${failed}; для них добавлены заглушки.` : 'ZIP готов к импорту в DomCollection.', 'success');
+      } catch (error) { showStatus(error.message, 'error'); }
+      finally { download.disabled = false; }
+    });
+  </script>
 </body>
 </html>
