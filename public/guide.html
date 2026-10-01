@@ -4,31 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Бесплатный перенос через DeepSeek — Хаб Коллекционера</title>
-  <style>
-    :root { color-scheme: light; font-family: system-ui, sans-serif; }
-    * { box-sizing: border-box; }
-    body { margin: 0; padding: 1rem; background: #f4f6fa; color: #20243a; }
-    main { width: min(100%, 52rem); margin: 1rem auto; padding: clamp(1.2rem, 4vw, 2.5rem); background: white; border-radius: 1.2rem; box-shadow: 0 12px 40px #20243a12; }
-    h1 { margin: .5rem 0; font-size: clamp(1.7rem, 5vw, 2.3rem); }
-    h2 { margin: 0 0 .7rem; font-size: 1.25rem; }
-    p, li { line-height: 1.55; }
-    li + li { margin-top: .45rem; }
-    a { color: #304ca7; }
-    .intro { color: #536179; }
-    .step { margin-top: 1.3rem; padding: 1.2rem; border: 1px solid #d9e0ea; border-radius: .9rem; }
-    .step-number { display: inline-grid; place-items: center; width: 2rem; height: 2rem; margin-right: .45rem; border-radius: 50%; background: #3753a7; color: white; font-weight: 700; }
-    .hint { padding: .8rem 1rem; border-left: .25rem solid #3753a7; background: #f2f5fd; }
-    .important { padding: .8rem 1rem; border-left: .25rem solid #ad6224; background: #fff7eb; }
-    textarea { width: 100%; min-height: 22rem; padding: .8rem; border: 1px solid #aeb9c9; border-radius: .5rem; resize: vertical; font: .9rem/1.45 ui-monospace, monospace; color: #20243a; background: #fafbfe; }
-    button, .action { display: inline-block; margin-top: .7rem; padding: .7rem 1rem; border: 0; border-radius: .55rem; background: #3753a7; color: white; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }
-    button:hover, .action:hover { background: #293f82; }
-    pre { overflow-x: auto; padding: .8rem; background: #f4f6fa; border-radius: .5rem; font-size: .85rem; }
-    details { margin-top: .7rem; padding: .7rem; border: 1px solid #d9e0ea; border-radius: .5rem; }
-    summary { cursor: pointer; font-weight: 700; }
-  </style>
+  <script src="/theme.js"></script>
+  <link rel="stylesheet" href="/theme.css">
 </head>
 <body>
-  <main>
+  <main class="guide-layout">
+    <header class="site-header">
+      <a class="site-brand" href="/">Хаб Коллекционера</a>
+      <nav class="site-actions" aria-label="Навигация">
+        <button class="theme-toggle" type="button" data-theme-toggle>Тема</button>
+        <a class="header-link" href="/admin">Вход</a>
+      </nav>
+    </header>
     <p><a href="/">← На страницу переноса</a></p>
     <h1>Перенести коллекцию бесплатно с помощью DeepSeek</h1>
     <p class="intro">Подойдёт для таблицы Excel, CSV, текстового списка или скопированных сообщений. DeepSeek поможет привести записи к одному виду. Наш сервис проверит результат и сделает ZIP для приложения DomCollection.</p>
@@ -48,22 +35,23 @@
     <section class="step">
       <h2><span class="step-number">2</span>Скопируйте готовый запрос</h2>
       <p>Нажмите кнопку ниже. Откройте <a href="https://chat.deepseek.com/" target="_blank" rel="noopener noreferrer">официальный чат DeepSeek</a>, войдите в аккаунт при необходимости и вставьте запрос в поле сообщения. На Windows вставка — <strong>Ctrl+V</strong>.</p>
-      <textarea id="prompt" readonly aria-label="Готовый запрос для DeepSeek">Ты помогаешь перенести список коллекционных моделей в приложение DomCollection. Преобразуй данные после строки «ДАННЫЕ КОЛЛЕКЦИИ» в JSON.
+      <textarea id="prompt" class="prompt-area" readonly aria-label="Готовый запрос для DeepSeek">Ты помогаешь перенести список коллекционных моделей в приложение DomCollection. Преобразуй данные после строки «ДАННЫЕ КОЛЛЕКЦИИ» в JSON.
 
 Верни только один корректный JSON-массив. Не добавляй объяснений, заголовков и текста после него. Один объект массива = одна модель. У каждого объекта должны быть ровно эти поля:
 "name" — название модели вместе с кодом, если код есть;
 "brand" — бренд или производитель модели;
 "scale" — масштаб, например "1:64";
-"category" — категория, если она указана;
+"category" — тип предмета, например "Автомобили" или "Аксессуары";
+"tags" — массив тегов: год выпуска, явно указанная серия или состояние MOC/Loose;
 "price" — цена покупки только числом, например "550" или "7.30";
 "purchaseDate" — именно дата покупки в формате ГГГГ-ММ-ДД;
 "notes" — другие полезные сведения из исходной записи;
 "photoUrl" — прямая ссылка на личное фото из Hunt64, если она явно есть.
 
-Все значения должны быть строками. Если значение неизвестно, напиши пустую строку "". Ничего не придумывай. Не считай дату добавления в сервис датой покупки. Если цены указаны в разных валютах, оставь поле price пустым и сохрани исходную цену с валютой в notes. Если фото нет или это ссылка не на личное фото Hunt64, оставь photoUrl пустым. Заголовки разделов и пустые строки не превращай в отдельные модели. Сохрани все реальные модели из переданного кусочка; не добавляй новые.
+Все значения, кроме tags, должны быть строками. Для неизвестного значения напиши пустую строку "", для отсутствующих тегов — []. Не придумывай масштаб: если все машинки 1:64, я выберу это на сайте при проверке. Год выпуска запиши тегом вида "Год выпуска: 1969"; он не является датой покупки. Если серия Premium явно указана, добавь тег "Premium". Не считай дату добавления в сервис датой покупки. Если цены указаны в разных валютах, оставь поле price пустым и сохрани исходную цену с валютой в notes. Если фото нет или это ссылка не на личное фото Hunt64, оставь photoUrl пустым. Заголовки разделов и пустые строки не превращай в отдельные модели. Сохрани все реальные модели из переданного кусочка; не добавляй новые.
 
 Пример одной записи в ответе:
-{"name":"A01 Classic Bird","brand":"Hot Wheels","scale":"1:64","category":"Автомобили","price":"550","purchaseDate":"","notes":"Синий цвет","photoUrl":""}
+{"name":"A01 Classic Bird","brand":"Hot Wheels","scale":"","category":"Автомобили","tags":["Год выпуска: 1969"],"price":"550","purchaseDate":"","notes":"Синий цвет","photoUrl":""}
 
 ДАННЫЕ КОЛЛЕКЦИИ:
 </textarea>
@@ -84,7 +72,7 @@
         <li>Вернитесь <a href="/">на страницу переноса</a>. Вставьте ответ в поле «Или вставьте текст / JSON из DeepSeek».</li>
         <li>Нажмите <strong>«Проверить JSON из DeepSeek»</strong>. Появится таблица распознанных моделей.</li>
         <li>Проверьте число моделей, названия, бренд, масштаб, категорию, цену, дату и заметки. Выберите валюту цен: рубли или евро. Если DeepSeek ошибся, исправьте ответ в чате и вставьте новый JSON.</li>
-        <li>Подтвердите предупреждение о проверке ИИ и нажмите <strong>«Скачать ZIP для DomCollection»</strong>. Сервис создаст нужный архив сам: вручную упаковывать JSON не надо.</li>
+        <li>После просмотра всех строк отметьте «Я проверил названия, категории, теги, цены и даты». Подтвердите предупреждение о проверке ИИ и нажмите <strong>«Скачать ZIP для DomCollection»</strong>. Сервис создаст нужный архив сам: вручную упаковывать JSON не надо.</li>
       </ol>
       <a class="action" href="/">Открыть страницу переноса</a>
       <p class="hint">Если цена отсутствует, в приложении будет 0 ₽ с пометкой в заметках. Если нет даты покупки, будет дата переноса с пометкой. Если нет доступного фото, появится заглушка. Перед скачиванием обратите на это внимание.</p>

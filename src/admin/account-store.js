@@ -89,6 +89,22 @@ export function createAccountStore({ dataDir, encryptionKey }) {
       if (!account.enabled) throw new Error('Выбранный ключ выключен');
       return account.apiKey;
     },
+    async getEnabledAccounts(primaryId) {
+      await queue;
+      const accounts = await readAccounts();
+      const primary = accounts.find((item) => item.id === primaryId);
+      if (!primary) throw new Error('Ключ не найден');
+      if (!primary.enabled) throw new Error('Выбранный ключ выключен');
+      const owners = new Set([primary.owner.trim().toLocaleLowerCase('ru')]);
+      const fallback = accounts.filter((item) => {
+        if (!item.enabled || item.id === primaryId) return false;
+        const owner = item.owner.trim().toLocaleLowerCase('ru');
+        if (owners.has(owner)) return false;
+        owners.add(owner);
+        return true;
+      });
+      return [primary, ...fallback];
+    },
     add({ owner, label, apiKey, consent }) {
       const normalizedOwner = String(owner ?? '').trim();
       const normalizedLabel = String(label ?? '').trim();

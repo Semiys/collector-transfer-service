@@ -4,46 +4,29 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Админ-панель — Хаб Коллекционера</title>
-  <style>
-    :root { font-family: system-ui, sans-serif; color-scheme: light; }
-    * { box-sizing: border-box; }
-    body { margin: 0; padding: 1.5rem; background: #f4f6fa; color: #20243a; }
-    main { max-width: 55rem; margin: 1rem auto; padding: 2rem; background: white; border-radius: 1rem; }
-    h1 { margin-top: 0; }
-    p { line-height: 1.5; }
-    form, .panel { border: 1px solid #d9e0ea; border-radius: .8rem; padding: 1.2rem; margin-top: 1rem; }
-    label { display: grid; gap: .35rem; margin-bottom: .8rem; font-weight: 600; }
-    input, button, select, textarea { font: inherit; }
-    input:not([type="checkbox"]), select, textarea { width: 100%; border: 1px solid #aeb9c9; border-radius: .5rem; padding: .6rem; }
-    textarea { min-height: 10rem; resize: vertical; }
-    button { border: 0; border-radius: .5rem; padding: .65rem 1rem; background: #3753a7; color: white; cursor: pointer; }
-    button:disabled { opacity: .55; cursor: wait; }
-    .secondary { background: #536179; }
-    .danger { background: #a42b35; }
-    .check { display: flex; align-items: flex-start; gap: .5rem; font-weight: 400; }
-    .error { color: #a42b35; }
-    .success { color: #176842; }
-    .account { border-top: 1px solid #e3e8ef; padding: 1rem 0; }
-    .account:first-child { border-top: 0; }
-    .account p { margin: .3rem 0; }
-    .actions { display: flex; gap: .5rem; margin-top: .7rem; }
-  </style>
+  <script src="/theme.js"></script>
+  <link rel="stylesheet" href="/theme.css">
 </head>
 <body>
-  <main>
+  <main class="admin-layout">
+    <header class="site-header">
+      <a class="site-brand" href="/">Хаб Коллекционера</a>
+      <nav class="site-actions" aria-label="Навигация">
+        <button class="theme-toggle" type="button" data-theme-toggle>Тема</button>
+        <button id="logout" class="secondary" type="button">Выйти</button>
+        <a class="header-link" href="/">На главную</a>
+      </nav>
+    </header>
     <h1>Ключи OpenRouter</h1>
     <p>Добавляйте только API-ключи владельцев, которые согласились участвовать. Логины и пароли не нужны. Ключи сохраняются в зашифрованном файле, а в списке видны только последние четыре символа.</p>
-    <p>Один выбранный ключ используется для распознавания текста. Результат нужно проверить перед созданием ZIP.</p>
+    <p>Выберите основной ключ. Если разрешите резервные ключи для конкретного запроса, сервис может переключиться на них при ограничении частоты. Результат нужно проверить перед созданием ZIP.</p>
 
     <section class="panel">
-      <label for="admin-token">Админ-токен сервера
-        <input id="admin-token" type="password" autocomplete="off" spellcheck="false">
-      </label>
-      <button id="load" type="button">Открыть список</button>
+      <button id="load" type="button">Обновить список ключей</button>
       <p id="status" role="status" aria-live="polite"></p>
     </section>
 
-    <form id="add-form">
+    <form id="add-form" class="panel">
       <h2>Добавить ключ</h2>
       <label for="owner">Имя владельца
         <input id="owner" maxlength="80" required>
@@ -63,11 +46,53 @@
       <div id="accounts"></div>
     </section>
 
-    <form id="ai-form">
+    <form id="job-form" class="panel">
+      <h2>Перенести файл с помощью ИИ</h2>
+      <p>Для проверки сервиса: CSV, XLSX, JSON, TXT или вставленный текст. До 300 непустых строк и 200 000 символов, файл до 8 МБ. В Excel читается первый заполненный лист с названиями столбцов в первой строке. Фото внутри Excel не извлекаются.</p>
+      <p>Обработка идёт частями в фоне. Можно обновить страницу: задание останется в памяти сервера. После перезапуска сервера его нужно создать заново. Очередь и обработка — до 15 минут; готовый результат доступен 10 минут. Исходники и результаты не записываются на диск.</p>
+      <label for="job-account">Основной ключ
+        <select id="job-account" required><option value="">Выберите включённый ключ</option></select>
+      </label>
+      <label for="job-file">Файл коллекции
+        <input id="job-file" type="file" accept=".csv,.xlsx,.json,.txt">
+      </label>
+      <label for="job-text">Или вставьте текст
+        <textarea id="job-text" maxlength="200000" placeholder="Список моделей или сообщения из Telegram"></textarea>
+      </label>
+      <label class="check"><input id="job-consent" type="checkbox" required>
+        <span>Разрешаю отправить все части этой коллекции внешнему ИИ через OpenRouter для распознавания. Личные данные удалены. <a href="/processing#ai-details" target="_blank" rel="noopener">Условия обработки</a></span>
+      </label>
+      <label class="check"><input id="job-fallback" type="checkbox" disabled>
+        <span id="job-fallback-label">Выберите основной ключ. Согласие действует только для этого задания.</span>
+      </label>
+      <button id="job-submit" type="submit">Создать задание</button>
+      <p id="job-message" role="status" aria-live="polite"></p>
+    </form>
+
+    <section class="panel" aria-labelledby="jobs-title">
+      <div class="actions"><h2 id="jobs-title">Задания в памяти</h2><button id="jobs-refresh" type="button" class="secondary">Обновить</button></div>
+      <p id="jobs-status" role="status" aria-live="polite">Загружаю список…</p>
+      <div id="jobs-list"></div>
+      <section id="job-result" hidden>
+        <h3>Сверка исходных строк</h3>
+        <p id="job-audit-summary"></p>
+        <details><summary>Связи моделей с исходником</summary><div id="job-model-sources" class="job-audit"></div></details>
+        <details id="job-unassigned-details"><summary>Строки без модели, включая заголовки</summary><div id="job-unassigned" class="job-audit"></div></details>
+        <details><summary>Замечания и диагностика</summary><div id="job-diagnostics" class="job-audit"></div></details>
+        <label class="check"><input id="job-audit-accept" type="checkbox"> Я проверил связи и строки без модели. После перехода проверю поля каждой модели.</label>
+        <button id="job-review" type="button" disabled>Перейти к проверке моделей и ZIP</button>
+        <p>При переходе результат удаляется из памяти сервера. Данные для предпросмотра временно передаются в эту вкладку браузера.</p>
+      </section>
+    </section>
+
+    <form id="ai-form" class="panel">
       <h2>Распознать свободный текст</h2>
-      <p>Для проверки вставьте небольшой список моделей или сообщения из Telegram. Текст будет отправлен выбранной бесплатной модели через OpenRouter. Если в нём есть личные данные, сначала удалите их.</p>
+      <p>Для проверки вставьте небольшой список моделей или сообщения из Telegram. Текст будет отправлен бесплатной Qwen через OpenRouter. Начните с 10–20 моделей: длинный JSON-ответ может оборваться. Если в тексте есть личные данные, сначала удалите их.</p>
       <label for="ai-account">Ключ для этого запроса
         <select id="ai-account" required><option value="">Сначала откройте список ключей</option></select>
+      </label>
+      <label class="check"><input id="ai-fallback" type="checkbox" disabled>
+        <span id="ai-fallback-label">Сначала откройте список ключей. Разрешение действует только для одного запроса.</span>
       </label>
       <label for="ai-text">Текст коллекции
         <textarea id="ai-text" minlength="10" maxlength="20000" required></textarea>
@@ -78,5 +103,6 @@
     </form>
   </main>
   <script src="/admin.js" defer></script>
+  <script src="/admin-jobs.js" defer></script>
 </body>
 </html>

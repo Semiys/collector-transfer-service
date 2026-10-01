@@ -24,6 +24,28 @@ function parsePrice(value, row) {
   return number;
 }
 
+function parseTags(value, row) {
+  if (!value) return [];
+  let entries;
+  if (value.startsWith('[')) {
+    try { entries = JSON.parse(value); }
+    catch { throw new Error(`Строка ${row}: теги должны быть списком строк`); }
+    if (!Array.isArray(entries)) throw new Error(`Строка ${row}: теги должны быть списком строк`);
+  } else entries = value.split(/[,;\n]/u);
+  if (entries.some((entry) => typeof entry !== 'string')) {
+    throw new Error(`Строка ${row}: каждый тег должен быть текстом`);
+  }
+  const tags = [...new Set(entries.map((entry) => entry.trim()).filter(Boolean))];
+  if (tags.length > 16 || tags.some((tag) => tag.length > 100)) {
+    throw new Error(`Строка ${row}: слишком много тегов или слишком длинный тег`);
+  }
+  return tags;
+}
+
+function isCarCategory(value) {
+  return /^(автомобили|машинки|automotive|cars)$/iu.test(value);
+}
+
 export async function buildArchive({ parsed, mapping, options, eurRate, downloadPhoto = downloadHunt64Photo }) {
   if (parsed.warnings?.length && options.acceptTextWarnings !== true) {
     throw new Error('Проверьте непрочитанные строки текста и подтвердите перенос');
@@ -35,6 +57,10 @@ export async function buildArchive({ parsed, mapping, options, eurRate, download
   if (mapped.length > MAX_MODELS) throw new Error(`За один раз можно перенести не более ${MAX_MODELS} моделей`);
   const exportedAt = new Date().toISOString();
   const defaultCategory = String(options.defaultCategory ?? '').trim() || 'Без категории';
+  const defaultScale = String(options.defaultScale ?? '').trim();
+  if (defaultScale && !/^[1-9]\d*:[1-9]\d*$/u.test(defaultScale)) {
+    throw new Error('Масштаб по умолчанию должен быть вида 1:64');
+  }
   const transferDate = String(options.transferDate ?? exportedAt.slice(0, 10)).trim();
   const priceCurrency = String(options.priceCurrency ?? detectPriceCurrency(mapping.price));
   if (!['EUR', 'RUB'].includes(priceCurrency)) throw new Error('Выберите валюту цены: RUB или EUR');
@@ -45,6 +71,9 @@ export async function buildArchive({ parsed, mapping, options, eurRate, download
 
   const categories = [];
   const categoryIds = new Map();
+  const tags = [];
+  const tagIds = new Map();
+  const modelTags = [];
   const models = [];
   const files = {};
   const failedPhotos = [];
@@ -57,6 +86,10 @@ export async function buildArchive({ parsed, mapping, options, eurRate, download
       throw new Error(`Строка ${row.sourceRow}: название должно содержать от 1 до 200 символов`);
     }
     const category = (row.category || defaultCategory).slice(0, 100);
+    const scale = row.scale || (isCarCategory(category) ? defaultScale : '');
+    if (scale && !/^[1-9]\d*:[1-9]\d*$/u.test(scale)) {
+      throw new Error(`Строка ${row.sourceRow}: масштаб должен быть вида 1:64`);
+    }
     if (!categoryIds.has(category)) {
       const id = categories.length + 1;
       categories.push({ id, name: category, colorHex: null });
@@ -84,18 +117,26 @@ export async function buildArchive({ parsed, mapping, options, eurRate, download
     totalPhotos += photo.length;
     if (totalPhotos > MAX_ARCHIVE_BYTES) throw new Error('Фотографии превышают лимит архива 100 МБ');
     const id = index + 1;
+    for (const tag of parseTags(row.tags, row.sourceRow)) {
+      if (!tagIds.has(tag)) {
+        const tagId = tags.length + 1;
+        tags.push({ id: tagId, name: tag });
+        tagIds.set(tag, tagId);
+      }
+      modelTags.push({ modelId: id, tagId: tagIds.get(tag) });
+    }
     const photoEntry = `photos/${id}.jpg`;
     files[photoEntry] = new Uint8Array(photo);
     const noteText = notes.filter(Boolean).join('\n').trim();
     if (noteText.length > 20_000) throw new Error(`Строка ${row.sourceRow}: заметки слишком длинные`);
     models.push({
-      id, name: row.name, brand: row.brand || null, scale: row.scale || null,
+      id, name: row.name, brand: row.brand || null, scale: scale || null,
       price, purchaseDate, notes: noteText || null, photoEntry,
       categoryId: categoryIds.get(category), createdAt: exportedAt,
     });
   }
 
-  const document = { formatVersion: 1, exportedAt, categories, models, tags: [], modelTags: [], config: null };
+  const document = { formatVersion: 1, exportedAt, categories, models, tags, modelTags, config: null };
   files['collection.json'] = strToU8(JSON.stringify(document));
   if (files['collection.json'].length > 8 * 1024 * 1024) throw new Error('JSON превышает лимит приложения');
   const archive = zipSync(files, { level: 0 });

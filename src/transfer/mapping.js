@@ -3,6 +3,7 @@ const ALIASES = {
   brand: [/^brand$/i, /^бренд$/i, /^производитель$/i],
   scale: [/^scale$/i, /^масштаб$/i],
   category: [/^категория из json$/i, /^категор/i, /^category$/i],
+  tags: [/^tags?$/i, /^теги?(?: из json)?$/i, /^метки?$/i],
   price: [/^price paid/i, /^purchase price/i, /^price$/i, /^цена покупки/i, /^цена$/i],
   purchaseDate: [/^purchase date/i, /^purchasedate$/i, /^дата покупки/i],
   notes: [/^notes?$/i, /^заметки$/i, /^примечания$/i],
@@ -36,7 +37,7 @@ export function mapRows(rows, mapping) {
       .map(([header, value]) => `${header}: ${value}`);
     return {
       name: get('name'), brand: get('brand'), scale: get('scale'),
-      category: get('category'), price: get('price'), purchaseDate: get('purchaseDate'),
+      category: get('category'), tags: get('tags'), price: get('price'), purchaseDate: get('purchaseDate'),
       notes: [get('notes'), ...extra].filter(Boolean).join('\n'),
       photoUrl: get('photoUrl'),
       sourceRow: source._sourceLine ?? index + 2,

@@ -4,48 +4,49 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Хаб Коллекционера — перенос коллекций</title>
-  <style>
-    :root { color-scheme: light; font-family: system-ui, sans-serif; }
-    * { box-sizing: border-box; }
-    body { min-height: 100vh; margin: 0; padding: 1.5rem; background: #f4f6fa; color: #20243a; }
-    main { width: min(100%, 62rem); margin: 2rem auto; padding: clamp(1.2rem, 4vw, 2.5rem); border-radius: 1.5rem; background: white; box-shadow: 0 12px 40px #20243a12; }
-    h1 { margin: 0 0 1rem; font-size: clamp(1.8rem, 5vw, 2.6rem); }
-    h2 { margin-top: 2rem; }
-    p { line-height: 1.5; }
-    .version { color: #536179; }
-    .panel { border: 1px solid #d9e0ea; border-radius: 1rem; padding: 1.2rem; margin-top: 1.5rem; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
-    label { display: grid; gap: .35rem; font-weight: 600; }
-    input, select, textarea, button { font: inherit; }
-    input, select, textarea { width: 100%; border: 1px solid #aeb9c9; border-radius: .6rem; padding: .6rem; background: white; color: #20243a; }
-    textarea { min-height: 8rem; resize: vertical; }
-    input[type="checkbox"] { width: auto; }
-    button { border: 0; border-radius: .7rem; padding: .8rem 1.2rem; background: #3753a7; color: white; font-weight: 700; cursor: pointer; }
-    button:disabled { opacity: .55; cursor: wait; }
-    .note { color: #536179; font-size: .92rem; }
-    .status { min-height: 1.5rem; font-weight: 600; }
-    .error { color: #a42b35; }
-    .success { color: #176842; }
-    .hidden { display: none; }
-    .scroll { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; margin-top: .8rem; }
-    th, td { padding: .65rem; text-align: left; border-bottom: 1px solid #e3e8ef; }
-    th { white-space: nowrap; }
-  </style>
+  <script src="/theme.js"></script>
+  <script src="/captcha.js"></script>
+  <link rel="stylesheet" href="/theme.css">
 </head>
 <body>
   <main>
-    <h1>Хаб Коллекционера — перенос коллекций</h1>
-    <p>Загрузите таблицу, проверьте соответствие столбцов и скачайте ZIP для импорта в DomCollection. Файлы обрабатываются при запросе и не сохраняются в сервисе.</p>
-    <p class="version">Версия 0.1 · CSV, XLSX, JSON и структурированный TXT · до 300 моделей и 8 МБ входного файла</p>
-    <p class="note"><a href="/guide">Пошаговая бесплатная инструкция с готовым промптом для DeepSeek</a></p>
-    <p class="note">Для пробного распознавания свободного текста через OpenRouter откройте <a href="/admin">админ-панель</a>.</p>
+    <header class="site-header">
+      <a class="site-brand" href="/">Хаб Коллекционера</a>
+      <nav class="site-actions" aria-label="Навигация">
+        <button class="theme-toggle" type="button" data-theme-toggle>Тема</button>
+        <a class="header-link" href="/admin">Вход</a>
+      </nav>
+    </header>
+    <section class="hero" aria-labelledby="page-title">
+      <span class="eyebrow">Перенос коллекции в DomCollection</span>
+      <h1 id="page-title">Ваши модели — в одном приложении</h1>
+      <p>Загрузите таблицу или текстовый список, проверьте найденные модели и получите ZIP для импорта. Выберите удобный способ переноса.</p>
+    </section>
+
+    <div class="path-grid">
+      <section class="path-card">
+        <span class="badge">Бесплатно</span>
+        <h2>Перенести самому</h2>
+        <p>Сайт разберёт понятные CSV, XLSX, JSON и TXT. Для сложного текста есть пошаговая инструкция с готовым запросом к DeepSeek.</p>
+        <div class="actions"><a class="action" href="#free-transfer">Начать бесплатно</a><a class="action secondary" href="/guide">Открыть инструкцию</a></div>
+      </section>
+      <section class="path-card paid">
+        <span class="badge">Планируемая услуга · 149 ₽</span>
+        <h2>Автоматический перенос</h2>
+        <p>Загрузите исходник, а сервис подготовит данные с помощью ИИ. Перед скачиванием вы проверите все модели. Оплата и публичное распознавание ещё разрабатываются.</p>
+        <a class="action" href="/automatic">Посмотреть, как это будет</a>
+      </section>
+    </div>
+
+    <section id="free-transfer" aria-labelledby="free-title">
+      <h2 id="free-title" class="section-heading">Бесплатный перенос</h2>
+      <p class="section-intro">Файлы обрабатываются при запросе и не сохраняются в сервисе. Сейчас доступно до 300 моделей и 8 МБ входного файла.</p>
 
     <section class="panel">
       <label for="source-file">Файл коллекции
         <input id="source-file" type="file" accept=".csv,.xlsx,.json,.txt">
       </label>
-      <p class="note">Можно вставить структурированный список вида «A01 Название — описание». Для текста из Telegram используйте <a href="/guide">бесплатную инструкцию</a>.</p>
+      <p class="note">Можно вставить список вида «A01 Название — описание» или Telegram-список с заголовками и строками «• Модель — описание». Если обычный разбор не подходит, используйте <a href="/guide">бесплатную инструкцию с DeepSeek</a>.</p>
       <label for="source-text">Или вставьте текст / JSON из DeepSeek
         <textarea id="source-text" placeholder="Структурированный список или JSON, который выдал DeepSeek"></textarea>
       </label>
@@ -70,27 +71,49 @@
         <label for="category">Категория для строк без категории
           <input id="category" type="text" value="Без категории" maxlength="100">
         </label>
+        <label for="default-scale">Масштаб для автомобилей без масштаба
+          <select id="default-scale"><option value="">Не подставлять</option><option value="1:64">1:64</option></select>
+        </label>
       </div>
+      <p class="note">Если все ваши машинки имеют масштаб 1:64, выберите его здесь. Для аксессуаров масштаб не подставляется.</p>
       <p class="note">Если в источнике нет даты покупки, будет указана сегодняшняя дата переноса с пометкой в заметках. Дата добавления в Hunt64 не считается датой покупки.</p>
       <p id="rate" class="note"></p>
       <p class="note">Берём только столбец с личным фото. Сейчас ссылки Hunt64 поддерживаются автоматически; WebP преобразуется в JPG. Недоступное фото заменяется заглушкой с пометкой. Импорт в приложении добавляет модели, а не ищет дубликаты.</p>
-      <div class="scroll"><table><thead><tr><th>Название</th><th>Бренд</th><th>Масштаб</th><th>Категория</th><th>Цена</th><th>Дата покупки</th><th>Заметки</th><th>Ссылка на фото</th></tr></thead><tbody id="preview-rows"></tbody></table></div>
-      <p><button id="download" type="button">Скачать ZIP для DomCollection</button></p>
+      <div class="scroll"><table><thead><tr><th>Название</th><th>Бренд</th><th>Масштаб</th><th>Категория</th><th>Теги</th><th>Цена</th><th>Дата покупки</th><th>Заметки</th><th>Ссылка на фото</th></tr></thead><tbody id="preview-rows"></tbody></table></div>
+      <label class="check review-confirm"><input id="confirm-preview" type="checkbox"> Я проверил названия, категории, теги, цены и даты в предпросмотре</label>
+      <section class="panel captcha-panel" aria-labelledby="free-captcha-title">
+        <h3 id="free-captcha-title">Проверка перед созданием архива</h3>
+        <div id="free-captcha"></div>
+        <p id="free-captcha-status" class="note" role="status"></p>
+        <button id="free-captcha-retry" class="secondary" type="button">Повторить проверку</button>
+        <p class="note">Проверка помогает защитить сервис от ботов. Содержимое коллекции в неё не передаётся. <a href="/processing" target="_blank" rel="noopener">Об обработке данных</a>.</p>
+      </section>
+      <p><button id="download" type="button" disabled>Скачать ZIP для DomCollection</button></p>
     </section>
+    </section>
+    <footer class="site-footer">Хаб Коллекционера · ZIP подходит для импорта в DomCollection. Перед импортом проверьте данные.</footer>
   </main>
   <script>
-    const fields = { name: 'Название модели', brand: 'Бренд', scale: 'Масштаб', category: 'Категория', price: 'Цена покупки', purchaseDate: 'Дата покупки', notes: 'Заметки', photoUrl: 'Ссылка на личное фото' };
+    const fields = { name: 'Название модели', brand: 'Бренд', scale: 'Масштаб', category: 'Категория', tags: 'Теги', price: 'Цена покупки', purchaseDate: 'Дата покупки', notes: 'Заметки', photoUrl: 'Ссылка на личное фото' };
     const fileInput = document.getElementById('source-file');
     const textInput = document.getElementById('source-text');
     const review = document.getElementById('review');
     const mappings = document.getElementById('mappings');
     const status = document.getElementById('status');
     const currency = document.getElementById('currency');
+    const defaultScale = document.getElementById('default-scale');
     const rate = document.getElementById('rate');
     const download = document.getElementById('download');
     let preview;
     let eurRate;
     let selectedFile;
+    let converting = false;
+    const captcha = CollectorCaptcha.mount({ container: document.getElementById('free-captcha'),
+      status: document.getElementById('free-captcha-status'), action: 'collection_zip',
+      onChange: (token) => { download.disabled = converting || !preview || !token; } });
+    document.getElementById('free-captcha-retry').addEventListener('click', () => {
+      captcha.reset(); captcha.initialize();
+    });
 
     function showStatus(message, type = '') {
       status.textContent = message;
@@ -105,9 +128,16 @@
       body.replaceChildren();
       for (const row of preview.rows) {
         const tr = document.createElement('tr');
-        for (const field of ['name', 'brand', 'scale', 'category', 'price', 'purchaseDate', 'notes', 'photoUrl']) {
+        for (const field of Object.keys(fields)) {
           const td = document.createElement('td');
-          const value = row[selected[field]] || '';
+          td.dataset.label = fields[field];
+          let value = row[selected[field]] || '';
+          if (field === 'scale' && !value && /^(автомобили|машинки|automotive|cars)$/i.test(row[selected.category] || '')) {
+            value = defaultScale.value;
+          }
+          if (field === 'tags' && value.startsWith('[')) {
+            try { value = JSON.parse(value).join(', '); } catch { /* Показываем исходный текст для проверки. */ }
+          }
           td.textContent = value || '—';
           tr.append(td);
         }
@@ -134,6 +164,8 @@
 
     async function preparePreview(file) {
       review.classList.add('hidden'); preview = null; eurRate = null;
+      captcha.reset();
+      document.getElementById('confirm-preview').checked = false;
       selectedFile = file;
       if (!file) return;
       showStatus('Читаю файл…');
@@ -174,6 +206,7 @@
         }
         currency.value = data.priceCurrency === 'UNKNOWN' ? '' : data.priceCurrency;
         renderRows(); review.classList.remove('hidden'); showStatus('Проверьте столбцы и модели.');
+        captcha.initialize();
         await updateRate();
       } catch (error) { showStatus(error.message, 'error'); }
     }
@@ -209,22 +242,29 @@
       preparePreview(new File([JSON.stringify(wrapped)], 'deepseek-result.json', { type: 'application/json' }));
     });
     currency.addEventListener('change', updateRate);
+    defaultScale.addEventListener('change', () => { if (preview) renderRows(); });
 
     download.addEventListener('click', async () => {
-      if (!preview) return;
+      if (!preview || converting) return;
       if (!mapping().name) { showStatus('Выберите столбец с названием модели.', 'error'); return; }
       if (!currency.value) { showStatus('Выберите валюту цены.', 'error'); return; }
       if (currency.value === 'EUR' && !eurRate) { showStatus('Дождитесь курса ЦБ.', 'error'); return; }
+      if (!document.getElementById('confirm-preview').checked) {
+        showStatus('Проверьте модели в предпросмотре и подтвердите проверку.', 'error'); return;
+      }
       if (preview.warnings?.length && !document.getElementById('accept-warnings').checked) {
         showStatus('Проверьте неоднозначные строки и подтвердите перенос.', 'error'); return;
       }
-      download.disabled = true; showStatus('Собираю архив и загружаю личные фото…');
+      if (!captcha.token) { showStatus('Пройдите проверку, что вы человек.', 'error'); return; }
+      converting = true; download.disabled = true; showStatus('Собираю архив и загружаю личные фото…');
       const form = new FormData();
+      form.append('captchaToken', captcha.token);
       form.append('file', selectedFile);
       form.append('mapping', JSON.stringify(mapping()));
       const now = new Date();
       const transferDate = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
       form.append('options', JSON.stringify({ priceCurrency: currency.value, defaultCategory: document.getElementById('category').value,
+        defaultScale: defaultScale.value,
         transferDate, expectedRateDate: eurRate?.date,
         acceptTextWarnings: !preview.warnings?.length || document.getElementById('accept-warnings').checked }));
       try {
@@ -237,7 +277,7 @@
         const failed = response.headers.get('X-Photo-Failed-Rows');
         showStatus(failed ? `ZIP готов. Фото не загрузились в строках: ${failed}; для них добавлены заглушки.` : 'ZIP готов к импорту в DomCollection.', 'success');
       } catch (error) { showStatus(error.message, 'error'); }
-      finally { download.disabled = false; }
+      finally { converting = false; captcha.reset(); }
     });
   </script>
 </body>

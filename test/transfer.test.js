@@ -92,7 +92,8 @@ test('XLSX parser reads first sheet', async () => {
 });
 
 test('JSON backup resolves category names and purchase date', async () => {
-  const source = { categories: [{ id: 2, name: 'Автомобили' }], models: [
+  const source = { categories: [{ id: 2, name: 'Автомобили' }], tags: [{ id: 4, name: 'Год выпуска: 1969' }],
+    modelTags: [{ modelId: 8, tagId: 4 }], models: [
     { id: 8, name: 'Модель 8', price: 120, purchaseDate: '2026-09-01', categoryId: 2 },
   ] };
   const parsed = await parseInput('collection.json', Buffer.from(JSON.stringify(source)));
@@ -100,6 +101,8 @@ test('JSON backup resolves category names and purchase date', async () => {
   assert.equal(mapping.category, 'Категория из JSON');
   assert.equal(mapping.purchaseDate, 'purchaseDate');
   assert.equal(parsed.rows[0][mapping.category], 'Автомобили');
+  assert.equal(mapping.tags, 'Теги из JSON');
+  assert.deepEqual(JSON.parse(parsed.rows[0][mapping.tags]), ['Год выпуска: 1969']);
 });
 
 test('semicolon CSV parses a quoted model name', async () => {
@@ -113,10 +116,12 @@ test('structured TXT preserves sections, codes and multiline notes', async () =>
   const parsed = await parseInput('collection.txt', Buffer.from(text));
   assert.equal(parsed.rows.length, 3);
   assert.equal(parsed.rows[0]['Бренд'], 'Hot Wheels');
-  assert.equal(parsed.rows[0]['Название'], 'Classic Bird (1969)');
+  assert.equal(parsed.rows[0]['Название'], 'A01 Classic Bird (1969)');
+  assert.equal(parsed.rows[0]['Категория'], 'Автомобили');
+  assert.deepEqual(JSON.parse(parsed.rows[0]['Теги']), ['Год выпуска: 1969']);
   assert.match(parsed.rows[0]['Заметки'], /Extremely rare/);
-  assert.equal(parsed.rows[1]['Название'], 'T-Totaller (1979)');
-  assert.equal(parsed.rows[2]['Категория'], 'АКСЕССУАРЫ');
+  assert.equal(parsed.rows[1]['Название'], 'B01T-Totaller (1979)');
+  assert.equal(parsed.rows[2]['Категория'], 'Аксессуары');
   assert.match(parsed.rows[2]['Заметки'], /Неизвестная строка/);
 });
 
@@ -127,4 +132,35 @@ test('TXT keeps explanatory bullets with their model', async () => {
   assert.equal(parsed.rows[0]['Название'], 'Архивный тест-сет');
   assert.match(parsed.rows[0]['Заметки'], /Техническая расшифровка/);
   assert.match(parsed.rows[0]['Заметки'], /Статус/);
+});
+
+test('Telegram-style TXT transfers years, condition, series and scale without tagging accessories as cars', async () => {
+  const text = `🔴 HOT WHEELS PREMIUM
+• 🇺🇸 Classic '57 Bird (1969) [MOC] — Mattel USA
+🟢 MATCHBOX LESNEY
+• 🇲🇴 Pocket Rockets — Gold Model (1986) [MOC] — Matchbox Intl Ltd
+💼 АКСЕССУАРЫ (ACCESSORIES)
+• 🇺🇸 X01 Hot Wheels Collector Case (1966) — Mattel USA`;
+  const parsed = await parseInput('telegram.txt', Buffer.from(text));
+  const mapping = suggestMapping(parsed.headers);
+  assert.equal(parsed.rows.length, 3);
+  assert.equal(parsed.rows[0]['Название'], "Classic '57 Bird (1969) [MOC]");
+  assert.equal(parsed.rows[0]['Категория'], 'Автомобили');
+  assert.deepEqual(JSON.parse(parsed.rows[0]['Теги']), ['Год выпуска: 1969', 'MOC', 'Premium']);
+  assert.equal(parsed.rows[1]['Название'], 'Pocket Rockets — Gold Model (1986) [MOC]');
+  assert.equal(parsed.rows[2]['Бренд'], 'Hot Wheels');
+  assert.equal(parsed.rows[2]['Категория'], 'Аксессуары');
+
+  const result = await buildArchive({ parsed, mapping,
+    options: { priceCurrency: 'RUB', transferDate: '2026-09-30', defaultScale: '1:64' } });
+  const document = result.document;
+  assert.equal(document.models[0].scale, '1:64');
+  assert.equal(document.models[1].scale, '1:64');
+  assert.equal(document.models[2].scale, null);
+  assert.deepEqual(document.modelTags.filter((link) => link.modelId === 1)
+    .map((link) => document.tags.find((tag) => tag.id === link.tagId).name),
+  ['Год выпуска: 1969', 'MOC', 'Premium']);
+  assert.deepEqual(document.modelTags.filter((link) => link.modelId === 3)
+    .map((link) => document.tags.find((tag) => tag.id === link.tagId).name),
+  ['Год выпуска: 1966']);
 });

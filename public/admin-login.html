@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Вход администратора — Хаб Коллекционера</title>
+  <script src="/theme.js"></script>
+  <link rel="stylesheet" href="/theme.css">
+</head>
+<body>
+  <main class="guide-layout">
+    <header class="site-header">
+      <a class="site-brand" href="/">Хаб Коллекционера</a>
+      <nav class="site-actions" aria-label="Навигация">
+        <button class="theme-toggle" type="button" data-theme-toggle>Тема</button>
+        <a class="header-link" href="/">На главную</a>
+      </nav>
+    </header>
+    <section class="panel login-panel">
+      <h1>Вход администратора</h1>
+      <p>Введите админ-код из настроек сервера. Он нужен только владельцу сервиса; посетителям сайта вход не требуется.</p>
+      <form id="login-form">
+        <label for="admin-code">Админ-код
+          <input id="admin-code" type="password" autocomplete="current-password" spellcheck="false" required>
+        </label>
+        <button type="submit">Войти</button>
+        <p id="login-status" class="status" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+  </main>
+  <script src="/admin/login.js" defer></script>
+</body>
+</html>

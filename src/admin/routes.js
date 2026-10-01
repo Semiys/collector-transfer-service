@@ -1,40 +1,28 @@
-import { timingSafeEqual } from 'node:crypto';
 import express from 'express';
-import { recognizeCollectionText } from '../ai/openrouter.js';
+import { OpenRouterRateLimitError } from '../ai/openrouter.js';
+import { createAiService } from '../ai/service.js';
+import { rateLimit } from '../http/limits.js';
 
-function matchesToken(actual, expected) {
-  const left = Buffer.from(actual ?? '');
-  const right = Buffer.from(expected ?? '');
-  return left.length === right.length && timingSafeEqual(left, right);
-}
-
-export function createAdminRouter({ store, token, fetchImpl = fetch, aiFetchImpl = fetch }) {
+export function createAdminRouter({ store, auth, fetchImpl = fetch, aiFetchImpl = fetch, aiService }) {
   const router = express.Router();
+  aiService ??= createAiService({ store, fetchImpl: aiFetchImpl });
+  router.use(auth.requireApi);
   router.use((request, response, next) => {
     response.set('Cache-Control', 'no-store');
-    if (!store || !token || token.length < 32) {
+    if (!store) {
       response.status(503).json({ error: 'Админ-панель не настроена на сервере' });
-      return;
-    }
-    if (!matchesToken(request.get('X-Admin-Token'), token)) {
-      response.status(401).json({ error: 'Неверный админ-токен' });
       return;
     }
     next();
   });
   router.use(express.json({ limit: '64kb' }));
 
-  router.post('/ai/parse', async (request, response) => {
+  router.post('/ai/parse', rateLimit({ max: 6, windowMs: 60_000 }), async (request, response) => {
     try {
-      const accountId = request.body?.accountId;
-      if (typeof accountId !== 'string' || !accountId) throw new Error('Выберите включённый ключ OpenRouter');
-      const apiKey = await store.getEnabledKey(accountId);
-      const result = await recognizeCollectionText({
-        text: request.body?.text, apiKey, model: 'openrouter/free', fetchImpl: aiFetchImpl,
-      });
-      response.json(result);
+      const route = await aiService.approve(request.body ?? {});
+      response.json(await aiService.run({ route, text: request.body?.text }));
     } catch (error) {
-      response.status(400).json({ error: error.message });
+      response.status(error instanceof OpenRouterRateLimitError ? 429 : 400).json({ error: error.message });
     }
   });
 

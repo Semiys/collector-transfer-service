@@ -6,6 +6,7 @@ import path from 'node:path';
 import express from 'express';
 import { createAccountStore } from '../src/admin/account-store.js';
 import { createAdminRouter } from '../src/admin/routes.js';
+import { createAdminSession } from '../src/admin/session.js';
 
 const fakeKey = `sk-or-v1-${'a'.repeat(64)}`;
 
@@ -31,13 +32,15 @@ test('admin storage encrypts API keys and does not return them in listings', asy
   }
 });
 
-test('admin API requires token and owner consent', async () => {
+test('admin API requires a session and owner consent', async () => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), 'collector-admin-api-'));
   const token = 't'.repeat(40);
   const store = createAccountStore({ dataDir, encryptionKey: '3'.repeat(64) });
   const app = express();
+  const auth = createAdminSession({ adminCode: token });
   let sentAuthorization;
-  app.use('/api/admin', createAdminRouter({ store, token, fetchImpl: async (_url, options) => {
+  app.use('/api/admin/session', auth.router);
+  app.use('/api/admin', createAdminRouter({ store, auth, fetchImpl: async (_url, options) => {
     sentAuthorization = options.headers.Authorization;
     return new Response(JSON.stringify({ data: { is_free_tier: true, expires_at: null } }), { status: 200 });
   } }));
@@ -46,7 +49,14 @@ test('admin API requires token and owner consent', async () => {
     await new Promise((resolve) => server.once('listening', resolve));
     const base = `http://127.0.0.1:${server.address().port}/api/admin/accounts`;
     assert.equal((await fetch(base)).status, 401);
-    const headers = { 'X-Admin-Token': token, 'Content-Type': 'application/json' };
+    const login = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/session`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: token }),
+    });
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get('set-cookie').split(';')[0];
+    const session = await (await fetch(`http://127.0.0.1:${server.address().port}/api/admin/session`,
+      { headers: { Cookie: cookie } })).json();
+    const headers = { Cookie: cookie, 'X-CSRF-Token': session.csrfToken, 'Content-Type': 'application/json' };
     const denied = await fetch(base, { method: 'POST', headers,
       body: JSON.stringify({ owner: 'Друг', label: 'Ключ', apiKey: fakeKey, consent: false }) });
     assert.equal(denied.status, 400);
@@ -60,6 +70,10 @@ test('admin API requires token and owner consent', async () => {
     const checkResponse = await fetch(`${base}/${added.id}/check`, { headers });
     assert.deepEqual(await checkResponse.json(), { valid: true, freeTier: true, expiresAt: null });
     assert.equal(sentAuthorization, `Bearer ${fakeKey}`);
+    const logout = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/session`,
+      { method: 'DELETE', headers });
+    assert.equal(logout.status, 200);
+    assert.equal((await fetch(base, { headers })).status, 401);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     await rm(dataDir, { recursive: true, force: true });

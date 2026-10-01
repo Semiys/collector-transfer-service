@@ -1,4 +1,4 @@
-﻿FROM node:24.21.0-alpine3.23
+FROM node:24.21.0-bookworm-slim
 
 WORKDIR /app
 COPY package.json package-lock.json ./

@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Макет автоматического переноса коллекции в DomCollection">
+  <title>Автоматический перенос — Хаб Коллекционера</title>
+  <script src="/theme.js"></script>
+  <script src="/captcha.js"></script>
+  <script src="/automatic.js" defer></script>
+  <link rel="stylesheet" href="/theme.css">
+  <link rel="stylesheet" href="/automatic.css">
+</head>
+<body>
+  <main class="automatic-layout">
+    <header class="site-header">
+      <a class="site-brand" href="/">Хаб Коллекционера</a>
+      <nav class="site-actions" aria-label="Навигация">
+        <button class="theme-toggle" type="button" data-theme-toggle>Тема</button>
+        <a class="header-link" href="/#free-transfer">Бесплатно</a>
+        <a class="header-link" href="/admin">Вход</a>
+      </nav>
+    </header>
+
+    <section class="automatic-hero" aria-labelledby="automatic-title">
+      <div>
+        <span class="eyebrow">Автоматический перенос · макет</span>
+        <h1 id="automatic-title">Из списка моделей — в коллекцию DomCollection</h1>
+        <p>Загрузите таблицу или вставьте текст. Сервис поможет разобрать записи, а перед скачиванием вы проверите каждую модель.</p>
+        <div class="automatic-hero-actions">
+          <a class="action secondary" href="/#free-transfer">Перенести бесплатно сейчас</a>
+          <span class="automatic-coming">Автоматический перенос пока разрабатывается</span>
+        </div>
+      </div>
+      <aside class="automatic-price" aria-label="Планируемая цена">
+        <span>Планируемая стоимость</span>
+        <strong>149 ₽</strong>
+        <p>За один перенос после проверки файла. Оплата пока отключена.</p>
+        <div class="automatic-price-rule"></div>
+        <ul>
+          <li>CSV, XLSX, JSON или TXT</li>
+          <li>Предпросмотр перед импортом</li>
+          <li>ZIP для приложения</li>
+        </ul>
+      </aside>
+    </section>
+
+    <div class="automatic-notice" role="status">
+      <span class="automatic-notice-dot" aria-hidden="true"></span>
+      Здесь можно проверить условия и пройти проверку от ботов. Загрузка файлов, распознавание и оплата пока отключены.
+    </div>
+
+    <nav class="automatic-steps" aria-label="Этапы автоматического переноса">
+      <a class="automatic-step is-current" href="#source" aria-current="step"><span>01</span><b>Исходник</b></a>
+      <a class="automatic-step" href="#conditions"><span>02</span><b>Условия</b></a>
+      <a class="automatic-step" href="#payment"><span>03</span><b>Оплата</b></a>
+      <a class="automatic-step" href="#result"><span>04</span><b>Результат</b></a>
+    </nav>
+
+    <div class="automatic-section-heading" id="source">
+      <div>
+        <span class="automatic-kicker">Шаг 01 / Подготовка</span>
+        <h2>Добавьте свою коллекцию</h2>
+        <p>Сначала сервис проверит тип и размер файла. Только после этого покажет условия и цену.</p>
+      </div>
+      <span class="automatic-state">Макет формы</span>
+    </div>
+
+    <div class="automatic-source-grid">
+      <section class="automatic-panel">
+        <div class="automatic-panel-title"><span class="automatic-icon" aria-hidden="true">↥</span><h3>Загрузить файл</h3></div>
+        <div class="automatic-drop">
+          <div class="automatic-file-icon" aria-hidden="true">
+            <svg viewBox="0 0 64 64" fill="none"><path d="M18 7h21l9 9v39a3 3 0 0 1-3 3H18a3 3 0 0 1-3-3V10a3 3 0 0 1 3-3Z" stroke="currentColor" stroke-width="2.5"/><path d="M39 7v10h9M23 36h17M23 43h13" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+          </div>
+          <strong>Перетащите сюда таблицу или список</strong>
+          <span>CSV, XLSX, JSON, TXT · до 8 МБ в текущем прототипе</span>
+          <button type="button" disabled>Выбрать файл</button>
+        </div>
+        <p class="automatic-help">Поддержку очень больших коллекций добавим вместе с обработкой частями. Исходный файл будет проверен до оплаты.</p>
+      </section>
+
+      <section class="automatic-panel">
+        <div class="automatic-panel-title"><span class="automatic-icon" aria-hidden="true">≡</span><h3>Или вставить текст</h3></div>
+        <label for="automatic-text">Например, список из заметок или сообщения Telegram</label>
+        <textarea id="automatic-text" disabled placeholder="A01 — название модели, бренд, год, цена&#10;A02 — следующая модель..."></textarea>
+        <p class="automatic-help">Нейросеть сможет помочь со свободным текстом. Перед отправкой данных потребуется отдельное согласие.</p>
+      </section>
+    </div>
+
+    <div class="automatic-section-heading" id="conditions">
+      <div>
+        <span class="automatic-kicker">Шаг 02 / Прозрачные условия</span>
+        <h2>Вы решаете, что отправлять</h2>
+        <p>После проверки исходника здесь появятся найденные записи и сведения об обработке.</p>
+      </div>
+    </div>
+
+    <div class="automatic-conditions-grid">
+      <section class="automatic-panel">
+        <h3>Перед распознаванием</h3>
+        <div class="automatic-condition"><span aria-hidden="true">1</span><p>Нейросеть поможет распределить записи по полям вашей коллекции.</p></div>
+        <div class="automatic-condition"><span aria-hidden="true">2</span><p id="automatic-availability">Проверяю доступность распознавания…</p></div>
+        <div class="automatic-condition"><span aria-hidden="true">3</span><p>Предложим отдельно подтвердить условия обработки и пройти проверку от ботов.</p></div>
+      </section>
+      <section class="automatic-panel automatic-consent-panel">
+        <h3>Ваши подтверждения</h3>
+        <label class="automatic-checkbox"><input id="automatic-ai-consent" type="checkbox"> Я согласен на передачу данных коллекции внешней нейросети для распознавания.</label>
+        <label class="automatic-checkbox"><input id="automatic-processing-consent" type="checkbox"><span>Я ознакомился с <a href="/processing" target="_blank" rel="noopener">условиями обработки данных</a>.</span></label>
+        <label id="automatic-switch-label" class="automatic-checkbox" hidden><input id="automatic-switch-consent" type="checkbox"><span id="automatic-switch-text"></span></label>
+        <details>
+          <summary>Подробнее о передаче данных</summary>
+          <p id="automatic-owners">Загружаю сведения об обработке…</p>
+          <p>Данные передаются внешней нейросети только с вашего согласия. <a href="/processing#ai-details" target="_blank" rel="noopener">Сведения о сервисах обработки</a>.</p>
+        </details>
+        <div id="automatic-captcha"></div>
+        <p id="automatic-captcha-status" class="automatic-help" role="status"></p>
+        <button id="automatic-captcha-retry" class="secondary" type="button">Повторить проверку</button>
+        <button id="automatic-check" type="button" disabled>Проверить условия</button>
+        <p id="automatic-status" class="status" role="status" aria-live="polite"></p>
+        <p class="automatic-help">Файлы используем только для переноса и не сохраняем в нашем сервисе. Сейчас можно проверить только условия — коллекция никуда не отправляется.</p>
+      </section>
+    </div>
+
+    <div class="automatic-section-heading" id="payment">
+      <div>
+        <span class="automatic-kicker">Шаг 03 / После проверки файла</span>
+        <h2>Подтвердите перенос</h2>
+        <p>Оплата появится только после подключения платёжного сервиса и проверки распознавания на реальных примерах.</p>
+      </div>
+    </div>
+
+    <section class="automatic-checkout automatic-panel" aria-label="Макет оплаты">
+      <div>
+        <span class="automatic-checkout-label">Автоматический перенос коллекции</span>
+        <strong>149 ₽</strong>
+        <p>Вы увидите количество найденных записей и сможете проверить результат перед скачиванием ZIP.</p>
+      </div>
+      <div class="automatic-checkout-actions">
+        <button type="button" disabled>Оплатить и начать</button>
+        <small>Оплата отключена · это макет</small>
+      </div>
+    </section>
+
+    <div class="automatic-section-heading" id="result">
+      <div>
+        <span class="automatic-kicker">Шаг 04 / Пример результата</span>
+        <h2>Проверьте модели и скачайте ZIP</h2>
+        <p>Это пример будущего экрана результата. Показанные записи вымышлены.</p>
+      </div>
+      <span class="automatic-state">Демонстрация</span>
+    </div>
+
+    <div class="automatic-result-grid">
+      <section class="automatic-panel">
+        <div class="automatic-result-top"><span class="automatic-result-mark" aria-hidden="true">✓</span><div><h3>Распознавание завершено</h3><p>Пример: 2 модели найдены, 1 поле требует проверки</p></div></div>
+        <div class="automatic-example-row"><span class="automatic-model-number">01</span><div><strong>Classic Bird</strong><span>Hot Wheels · Автомобили · 1:64</span></div><span class="automatic-row-state">Готово</span></div>
+        <div class="automatic-example-row"><span class="automatic-model-number">02</span><div><strong>Corvette C6</strong><span>Hot Wheels · Автомобили · цена не указана</span></div><span class="automatic-row-state needs-review">Проверить</span></div>
+        <div class="automatic-review-note">Перед скачиванием можно будет исправить поля, проверить цены и даты покупки.</div>
+      </section>
+      <aside class="automatic-panel automatic-download">
+        <div class="automatic-download-icon" aria-hidden="true">ZIP</div>
+        <h3>Архив для DomCollection</h3>
+        <p>В ZIP будут <code>collection.json</code> и фотографии моделей. При отсутствии фото приложение получит заглушку.</p>
+        <button type="button" disabled>Скачать ZIP</button>
+        <small>Кнопка станет доступна после проверки реального результата</small>
+      </aside>
+    </div>
+
+    <footer class="site-footer">Хаб Коллекционера · <a href="/#free-transfer">Бесплатный перенос уже доступен</a> · Автоматический перенос пока в разработке</footer>
+  </main>
+</body>
+</html>

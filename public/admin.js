@@ -1,10 +1,35 @@
-const tokenInput = document.getElementById('admin-token');
 const status = document.getElementById('status');
 const list = document.getElementById('accounts');
 const aiAccount = document.getElementById('ai-account');
+const aiFallback = document.getElementById('ai-fallback');
+const aiFallbackLabel = document.getElementById('ai-fallback-label');
 const aiStatus = document.getElementById('ai-status');
 const aiReview = document.getElementById('ai-review');
 let recognizedCollection = null;
+let accountsCache = [];
+let csrfToken = '';
+
+function fallbackAccounts() {
+  const selected = accountsCache.find((account) => account.id === aiAccount.value && account.enabled);
+  if (!selected) return [];
+  const owners = new Set([selected.owner.trim().toLocaleLowerCase('ru')]);
+  return accountsCache.filter((account) => {
+    if (!account.enabled || account.id === selected.id) return false;
+    const owner = account.owner.trim().toLocaleLowerCase('ru');
+    if (owners.has(owner)) return false;
+    owners.add(owner);
+    return true;
+  }).slice(0, 2);
+}
+
+function renderFallbackConsent() {
+  aiFallback.checked = false;
+  const fallback = fallbackAccounts();
+  aiFallback.disabled = fallback.length === 0;
+  aiFallbackLabel.textContent = fallback.length ?
+    `Разрешаю для этого запроса повторно отправить мой текст через OpenRouter с ключами владельцев: ${fallback.map((account) => `${account.owner} (${account.label})`).join(', ')}. Это произойдёт только при лимите основного ключа или приближении к нему по счётчику нашего сервиса.` :
+    'Нет доступных резервных ключей других владельцев. Добавьте их выше, если они согласны участвовать.';
+}
 
 function showStatus(message, kind = '') {
   status.textContent = message;
@@ -12,14 +37,17 @@ function showStatus(message, kind = '') {
 }
 
 async function adminRequest(method, route, body) {
-  const token = tokenInput.value.trim();
-  if (!token) throw new Error('Введите админ-токен');
   const response = await fetch(`/api/admin${route}`, {
-    method, cache: 'no-store', credentials: 'omit',
-    headers: { 'X-Admin-Token': token, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    method, cache: 'no-store', credentials: 'same-origin',
+    headers: { ...(method !== 'GET' ? { 'X-CSRF-Token': csrfToken } : {}),
+      ...(body ? { 'Content-Type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
   const result = await response.json();
+  if (response.status === 401) {
+    location.assign('/admin/login');
+    throw new Error('Сессия завершилась. Войдите снова.');
+  }
   if (!response.ok) throw new Error(result.error ?? 'Запрос не выполнен');
   return result;
 }
@@ -71,6 +99,7 @@ function accountRow(account) {
 
 async function loadAccounts() {
   const result = await adminRequest('GET', '/accounts');
+  accountsCache = result.accounts;
   list.replaceChildren();
   const previousAccount = aiAccount.value;
   aiAccount.replaceChildren(new Option('Выберите включённый ключ', ''));
@@ -81,11 +110,26 @@ async function loadAccounts() {
     if (account.enabled) aiAccount.append(new Option(`${account.label} — ${account.owner}`, account.id));
   });
   if ([...aiAccount.options].some((option) => option.value === previousAccount)) aiAccount.value = previousAccount;
+  renderFallbackConsent();
   showStatus(`Ключей в списке: ${result.accounts.length}`, 'success');
+  document.dispatchEvent(new CustomEvent('collector-accounts', { detail: result.accounts }));
 }
+
+aiAccount.addEventListener('change', renderFallbackConsent);
 
 document.getElementById('load').addEventListener('click', () => {
   loadAccounts().catch((error) => showStatus(error.message, 'error'));
+});
+
+document.getElementById('logout').addEventListener('click', async () => {
+  try {
+    const response = await fetch('/api/admin/session', { method: 'DELETE', cache: 'no-store',
+      credentials: 'same-origin', headers: { 'X-CSRF-Token': csrfToken } });
+    if (response.ok || response.status === 401) location.assign('/admin/login');
+    else showStatus('Не удалось выйти. Обновите страницу и повторите.', 'error');
+  } catch {
+    showStatus('Нет связи с сервером. Повторите выход позже.', 'error');
+  }
 });
 
 document.getElementById('ai-form').addEventListener('submit', async (event) => {
@@ -97,17 +141,20 @@ document.getElementById('ai-form').addEventListener('submit', async (event) => {
   aiStatus.textContent = 'Отправляю текст в OpenRouter…';
   aiStatus.className = '';
   try {
+    const consentToAccountSwitch = aiFallback.checked;
     const result = await adminRequest('POST', '/ai/parse', {
       accountId: aiAccount.value, text: document.getElementById('ai-text').value,
+      consentToAccountSwitch,
+      fallbackAccountIds: consentToAccountSwitch ? fallbackAccounts().map((account) => account.id) : [],
     });
     recognizedCollection = result;
-    aiStatus.textContent = `Распознано моделей: ${result.models.length}. Замечаний: ${result.warnings.length}. Проверьте все строки перед скачиванием ZIP.`;
+    aiStatus.textContent = `Модель: ${result.modelUsed}. Ключ: ${result.keyUsed.label} (${result.keyUsed.owner})${result.fallbackUsed ? ' — использован резервный ключ' : ''}. Распознано моделей: ${result.models.length}. Замечаний: ${result.warnings.length}. Проверьте все строки перед скачиванием ZIP.`;
     aiStatus.className = 'success';
     aiReview.hidden = false;
   } catch (error) {
     aiStatus.textContent = error.message;
     aiStatus.className = 'error';
-  } finally { button.disabled = false; }
+  } finally { button.disabled = false; aiFallback.checked = false; }
 });
 
 aiReview.addEventListener('click', () => {
@@ -134,3 +181,16 @@ document.getElementById('add-form').addEventListener('submit', async (event) => 
   } catch (error) { showStatus(error.message, 'error'); }
   finally { button.disabled = false; }
 });
+
+fetch('/api/admin/session', { cache: 'no-store', credentials: 'same-origin' })
+  .then(async (response) => {
+    if (response.status === 401) { location.assign('/admin/login'); return null; }
+    if (!response.ok) throw new Error('Не удалось проверить вход администратора');
+    return response.json();
+  })
+  .then((session) => {
+    if (!session) return;
+    csrfToken = session.csrfToken;
+    return loadAccounts();
+  })
+  .catch((error) => showStatus(error.message, 'error'));

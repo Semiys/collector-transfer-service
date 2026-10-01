@@ -39,12 +39,28 @@ function parseJson(bytes) {
       ...warnings.map((item, index) => ({ line: index + 1, text: item })),
     ];
     parsed.type = 'ai-json';
+    if (['RUB', 'EUR', 'UNKNOWN'].includes(source.priceCurrency)) parsed.priceCurrency = source.priceCurrency;
   }
   if (!Array.isArray(source) && Array.isArray(source?.categories)) {
     const categoryById = new Map(source.categories.map((item) => [item.id, item.name]));
     parsed.headers.push('Категория из JSON');
     parsed.rows.forEach((row, index) => {
       row['Категория из JSON'] = categoryById.get(objects[index].categoryId) ?? '';
+    });
+  }
+  if (!Array.isArray(source) && Array.isArray(source?.tags) && Array.isArray(source?.modelTags)) {
+    const tagById = new Map(source.tags.map((item) => [item.id, item.name]));
+    const tagsByModel = new Map();
+    for (const link of source.modelTags) {
+      const tagName = tagById.get(link.tagId);
+      if (!tagName) continue;
+      const names = tagsByModel.get(link.modelId) ?? [];
+      names.push(tagName);
+      tagsByModel.set(link.modelId, names);
+    }
+    parsed.headers.push('Теги из JSON');
+    parsed.rows.forEach((row, index) => {
+      row['Теги из JSON'] = JSON.stringify(tagsByModel.get(objects[index].id) ?? []);
     });
   }
   return parsed;
