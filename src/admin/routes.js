@@ -2,6 +2,7 @@ import express from 'express';
 import { OpenRouterRateLimitError } from '../ai/openrouter.js';
 import { createAiService } from '../ai/service.js';
 import { rateLimit } from '../http/limits.js';
+import { getKeyStatus } from '../ai/key-status.js';
 
 export function createAdminRouter({ store, auth, fetchImpl = fetch, aiFetchImpl = fetch, aiService }) {
   const router = express.Router();
@@ -22,7 +23,11 @@ export function createAdminRouter({ store, auth, fetchImpl = fetch, aiFetchImpl 
       const route = await aiService.approve(request.body ?? {});
       response.json(await aiService.run({ route, text: request.body?.text }));
     } catch (error) {
-      response.status(error instanceof OpenRouterRateLimitError ? 429 : 400).json({ error: error.message });
+      if (error instanceof OpenRouterRateLimitError) {
+        const seconds = Math.ceil(error.retryAfterMs / 1000);
+        response.set('Retry-After', String(seconds)).status(429).json({ error: error.message,
+          retryAfterSeconds: seconds, limitSource: error.details.source });
+      } else response.status(400).json({ error: error.message });
     }
   });
 
@@ -37,18 +42,7 @@ export function createAdminRouter({ store, auth, fetchImpl = fetch, aiFetchImpl 
   router.get('/accounts/:id/check', async (request, response) => {
     try {
       const key = await store.getKey(request.params.id);
-      const upstream = await fetchImpl('https://openrouter.ai/api/v1/key', {
-        headers: { Authorization: `Bearer ${key}`, Accept: 'application/json' },
-        redirect: 'error', signal: AbortSignal.timeout(8_000),
-      });
-      if (upstream.status === 401 || upstream.status === 403) {
-        response.json({ valid: false, reason: 'OpenRouter отклонил ключ' });
-        return;
-      }
-      if (!upstream.ok) throw new Error(`OpenRouter временно недоступен: HTTP ${upstream.status}`);
-      const data = (await upstream.json()).data;
-      if (!data || typeof data !== 'object') throw new Error('OpenRouter вернул неожиданный ответ');
-      response.json({ valid: true, freeTier: data.is_free_tier === true, expiresAt: data.expires_at ?? null });
+      response.json(await getKeyStatus({ apiKey: key, fetchImpl }));
     } catch (error) {
       response.status(error.message === 'Ключ не найден' ? 404 : 503).json({ error: error.message });
     }

@@ -22,18 +22,61 @@ const EXTRACTION_INSTRUCTIONS = [
 ].join('\n');
 
 export class OpenRouterRateLimitError extends Error {
-  constructor(retryAfterMs) {
-    super('OpenRouter ограничил частоту запросов для этого ключа; повторите позже');
+  constructor(retryAfterMs, { source = 'unknown', retryAfterProvided = false, limit, remaining } = {}) {
+    const origin = source === 'provider' ? 'Поставщик модели ограничил частоту запросов (HTTP 429).' :
+      source === 'platform' ? 'OpenRouter ограничил частоту запросов (HTTP 429): лимит сервиса.' :
+        'OpenRouter ограничил частоту запросов (HTTP 429). Источник ограничения не указан.';
+    const counters = source === 'platform' && Number.isSafeInteger(limit) && Number.isSafeInteger(remaining) ?
+      ` Осталось ${remaining} из ${limit} запросов по сработавшему лимиту.` : '';
+    const seconds = Math.ceil(retryAfterMs / 1000);
+    super(origin + counters + (retryAfterProvided ? ` Повторите не раньше чем через ${seconds} с.` :
+      ` Срок ожидания не указан; повторная отправка приостановлена на ${seconds} с.`));
     this.name = 'OpenRouterRateLimitError';
     this.retryAfterMs = retryAfterMs;
+    this.details = { source, retryAfterProvided, limit, remaining };
   }
 }
 
-function retryAfterMs(value) {
-  if (!value) return 5 * 60_000;
+function retryDelay(value) {
   const seconds = Number(value);
-  const milliseconds = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - Date.now();
-  return Number.isFinite(milliseconds) ? Math.max(5_000, Math.min(milliseconds, 24 * 60 * 60_000)) : 5 * 60_000;
+  const milliseconds = value?.trim() ? (Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - Date.now()) : NaN;
+  return Number.isSafeInteger(Math.ceil(milliseconds)) && milliseconds >= 0 ?
+    { milliseconds: Math.max(5_000, milliseconds), provided: true } : { milliseconds: 5 * 60_000, provided: false };
+}
+
+function rateLimitError(upstream, payload) {
+  const numberHeader = (name) => {
+    const value = upstream.headers.get(name);
+    return value && /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) ? Number(value) : undefined;
+  };
+  const limit = numberHeader('x-ratelimit-limit');
+  const remaining = numberHeader('x-ratelimit-remaining');
+  const metadata = payload?.error?.metadata;
+  const providerReported = (typeof metadata?.provider_code === 'string' && metadata.provider_code.trim()) ||
+    (typeof metadata?.provider_name === 'string' && metadata.provider_name.trim());
+  const source = limit !== undefined || remaining !== undefined || upstream.headers.has('x-ratelimit-reset') ? 'platform' :
+    providerReported ? 'provider' : 'unknown';
+  const delay = retryDelay(upstream.headers.get('retry-after'));
+  // Keep only safe categories and counters, never raw upstream messages or collection data.
+  return new OpenRouterRateLimitError(delay.milliseconds, { source, retryAfterProvided: delay.provided, limit, remaining });
+}
+
+export async function readJsonResponse(upstream, signal, maxBytes = 2 * 1024 * 1024) {
+  const reader = upstream.body?.getReader();
+  if (!reader) throw new Error('Empty body');
+  const parts = [];
+  let length = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      signal?.throwIfAborted();
+      if (done) break;
+      length += value.byteLength;
+      if (length > maxBytes) { await reader.cancel(); throw new Error('Response too large'); }
+      parts.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  return JSON.parse(Buffer.concat(parts).toString('utf8'));
 }
 
 function normalizeResult(value, { allowEmpty = false } = {}) {
@@ -101,28 +144,25 @@ async function requestJson({ text, apiKey, model, fetchImpl, signal, schema = SC
     throw new Error(error.name === 'TimeoutError' ? 'OpenRouter не ответил за 60 секунд' : 'Не удалось связаться с OpenRouter');
   }
   if (upstream.status === 401 || upstream.status === 403) throw new Error('OpenRouter отклонил выбранный API-ключ');
-  if (upstream.status === 429) throw new OpenRouterRateLimitError(retryAfterMs(upstream.headers.get('retry-after')));
+  if (upstream.status === 429) {
+    let errorPayload;
+    try { errorPayload = await readJsonResponse(upstream, signal, 64 * 1024); }
+    catch { signal?.throwIfAborted(); }
+    throw rateLimitError(upstream, errorPayload);
+  }
   if (!upstream.ok) throw new Error(`OpenRouter не обработал запрос: HTTP ${upstream.status}`);
   let payload;
   try {
-    const reader = upstream.body?.getReader();
-    if (!reader) throw new Error('Empty body');
-    const parts = [];
-    let length = 0;
-    try {
-      while (true) {
-        const { value, done } = await reader.read();
-        signal?.throwIfAborted();
-        if (done) break;
-        length += value.byteLength;
-        if (length > 2 * 1024 * 1024) { await reader.cancel(); throw new Error('Response too large'); }
-        parts.push(value);
-      }
-    } finally { reader.releaseLock(); }
-    payload = JSON.parse(Buffer.concat(parts).toString('utf8'));
+    payload = await readJsonResponse(upstream, signal);
   }
   catch { signal?.throwIfAborted(); throw new Error('OpenRouter вернул некорректный JSON ответа'); }
   signal?.throwIfAborted();
+  if (payload?.error) {
+    if (payload.error.code === 429 || payload.error.metadata?.error_type === 'rate_limit_exceeded') {
+      throw rateLimitError(upstream, payload);
+    }
+    throw new Error('OpenRouter сообщил об ошибке во время обработки; результат не получен');
+  }
   if (payload?.choices?.[0]?.finish_reason === 'length') {
     throw new Error('Ответ ИИ оборвался из-за лимита длины. Разделите список на части по 10–20 моделей.');
   }

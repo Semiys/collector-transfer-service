@@ -10,13 +10,14 @@
 <body>
   <main class="guide-layout">
     <header class="site-header">
-      <a class="site-brand" href="/">Хаб Коллекционера</a>
-      <nav class="site-actions" aria-label="Навигация">
+      <a class="site-brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span>Хаб Коллекционера<small>Перенос коллекций</small></span></a>
+      <div class="site-actions">
         <button class="theme-toggle" type="button" data-theme-toggle>Тема</button>
         <a class="header-link" href="/admin">Вход</a>
-      </nav>
+      </div>
+      <nav class="site-nav" aria-label="Разделы сайта"><a href="/#free-transfer">Перенос коллекции</a><a href="/guide" aria-current="page">Инструкция</a><a href="/processing">Обработка данных</a></nav>
     </header>
-    <p><a href="/">← На страницу переноса</a></p>
+    <p class="back-action"><a class="action secondary" href="/">← Вернуться к переносу</a></p>
     <h1>Перенести коллекцию бесплатно с помощью DeepSeek</h1>
     <p class="intro">Подойдёт для таблицы Excel, CSV, текстового списка или скопированных сообщений. DeepSeek поможет привести записи к одному виду. Наш сервис проверит результат и сделает ZIP для приложения DomCollection.</p>
     <p class="hint"><strong>Есть обычная таблица Excel или CSV?</strong> Сначала попробуйте <a href="/">загрузить её напрямую</a>. DeepSeek нужен, если таблица устроена необычно или данные записаны свободным текстом.</p>
@@ -55,7 +56,7 @@
 
 ДАННЫЕ КОЛЛЕКЦИИ:
 </textarea>
-      <button id="copy-prompt" type="button">Скопировать запрос</button>
+      <div class="actions"><button id="copy-prompt" type="button">Скопировать запрос</button><a class="action secondary" href="https://chat.deepseek.com/" target="_blank" rel="noopener noreferrer">Открыть DeepSeek ↗</a></div>
       <p id="copy-status" role="status" aria-live="polite"></p>
       <p class="important"><strong>Важно:</strong> после строки «ДАННЫЕ КОЛЛЕКЦИИ:» вставьте скопированные строки своей коллекции и только потом отправьте сообщение DeepSeek. Без ваших строк нейросети нечего преобразовывать.</p>
     </section>
@@ -69,12 +70,12 @@
     <section class="step">
       <h2><span class="step-number">4</span>Проверьте данные и скачайте ZIP</h2>
       <ol>
-        <li>Вернитесь <a href="/">на страницу переноса</a>. Вставьте ответ в поле «Или вставьте текст / JSON из DeepSeek».</li>
+        <li>Вернитесь на страницу переноса кнопкой ниже. Будет открыт режим «Вставить текст» и выбран формат «JSON — готовый ответ нейросети». Вставьте весь ответ в поле «Текст коллекции».</li>
         <li>Нажмите <strong>«Проверить JSON из DeepSeek»</strong>. Появится таблица распознанных моделей.</li>
         <li>Проверьте число моделей, названия, бренд, масштаб, категорию, цену, дату и заметки. Выберите валюту цен: рубли или евро. Если DeepSeek ошибся, исправьте ответ в чате и вставьте новый JSON.</li>
         <li>После просмотра всех строк отметьте «Я проверил названия, категории, теги, цены и даты». Подтвердите предупреждение о проверке ИИ и нажмите <strong>«Скачать ZIP для DomCollection»</strong>. Сервис создаст нужный архив сам: вручную упаковывать JSON не надо.</li>
       </ol>
-      <a class="action" href="/">Открыть страницу переноса</a>
+      <a class="action" href="/#paste">Вставить готовый ответ →</a>
       <p class="hint">Если цена отсутствует, в приложении будет 0 ₽ с пометкой в заметках. Если нет даты покупки, будет дата переноса с пометкой. Если нет доступного фото, появится заглушка. Перед скачиванием обратите на это внимание.</p>
     </section>
 
@@ -95,6 +96,7 @@
       <details><summary>Фотографии не перенеслись</summary><p>Сейчас сервис умеет получать личные фото по ссылкам Hunt64. Встроенные в Excel картинки и файлы фото из сообщений DeepSeek не передаёт в ZIP. Для таких моделей добавляется заглушка; фото можно добавить в приложении позже.</p></details>
       <details><summary>Моделей больше 300</summary><p>Разделите коллекцию на несколько частей. Для каждой получите отдельный JSON и ZIP, затем импортируйте архивы по одному. Не повторяйте одну и ту же модель в разных частях.</p></details>
     </section>
+    <footer class="site-footer"><span>Хаб Коллекционера</span><a class="action secondary" href="/">← Вернуться к переносу</a></footer>
   </main>
   <script>
     document.getElementById('copy-prompt').addEventListener('click', () => {

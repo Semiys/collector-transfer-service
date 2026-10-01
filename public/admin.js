@@ -67,7 +67,10 @@ function accountRow(account) {
     check.disabled = true;
     try {
       const result = await adminRequest('GET', `/accounts/${encodeURIComponent(account.id)}/check`);
-      showStatus(result.valid ? `Ключ «${account.label}» принят OpenRouter${result.freeTier ? ' (бесплатный тариф)' : ''}.` :
+      const quota = result.freeRequestsToday;
+      const quotaText = quota ? ` Бесплатных запросов сегодня: использовано ${quota.used}, осталось ${quota.remaining} из ${quota.limit}. Суточный счётчик общий для аккаунта; у поставщика модели могут быть отдельные ограничения.` :
+        ' OpenRouter не сообщил остаток бесплатных запросов; по действительности ключа нельзя судить об остатке лимита.';
+      showStatus(result.valid ? `Ключ «${account.label}» принят OpenRouter${result.freeTier ? ' (бесплатный тариф)' : ''}.${quotaText}` :
         `Ключ «${account.label}» отклонён OpenRouter.`, result.valid ? 'success' : 'error');
     } catch (error) { showStatus(error.message, 'error'); }
     finally { check.disabled = false; }

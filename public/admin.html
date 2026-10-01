@@ -10,14 +10,17 @@
 <body>
   <main class="admin-layout">
     <header class="site-header">
-      <a class="site-brand" href="/">Хаб Коллекционера</a>
-      <nav class="site-actions" aria-label="Навигация">
+      <a class="site-brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span>Хаб Коллекционера<small>Перенос коллекций</small></span></a>
+      <div class="site-actions">
         <button class="theme-toggle" type="button" data-theme-toggle>Тема</button>
         <button id="logout" class="secondary" type="button">Выйти</button>
-        <a class="header-link" href="/">На главную</a>
-      </nav>
+        <a class="header-link" href="/">← На главную</a>
+      </div>
+      <nav class="site-nav" aria-label="Разделы панели"><a href="#job-form">Распознавание</a><a href="#jobs-title">Задания</a><a href="#keys">Ключи</a></nav>
     </header>
-    <h1>Ключи OpenRouter</h1>
+    <section class="hero"><span class="eyebrow">Для администратора</span><h1>Панель управления</h1><p>Переносите тестовые коллекции и проверяйте результаты. Для первого запуска добавьте ключ в разделе ниже.</p></section>
+    <details class="panel key-management"><summary>Ключи распознавания · OpenRouter</summary>
+    <h2 id="keys">Ключи OpenRouter</h2>
     <p>Добавляйте только API-ключи владельцев, которые согласились участвовать. Логины и пароли не нужны. Ключи сохраняются в зашифрованном файле, а в списке видны только последние четыре символа.</p>
     <p>Выберите основной ключ. Если разрешите резервные ключи для конкретного запроса, сервис может переключиться на них при ограничении частоты. Результат нужно проверить перед созданием ZIP.</p>
 
@@ -45,6 +48,7 @@
       <h2>Сохранённые ключи</h2>
       <div id="accounts"></div>
     </section>
+    </details>
 
     <form id="job-form" class="panel">
       <h2>Перенести файл с помощью ИИ</h2>
@@ -85,7 +89,8 @@
       </section>
     </section>
 
-    <form id="ai-form" class="panel">
+    <details class="panel"><summary>Быстрая проверка короткого текста</summary>
+    <form id="ai-form">
       <h2>Распознать свободный текст</h2>
       <p>Для проверки вставьте небольшой список моделей или сообщения из Telegram. Текст будет отправлен бесплатной Qwen через OpenRouter. Начните с 10–20 моделей: длинный JSON-ответ может оборваться. Если в тексте есть личные данные, сначала удалите их.</p>
       <label for="ai-account">Ключ для этого запроса
@@ -101,6 +106,7 @@
       <p id="ai-status" role="status" aria-live="polite"></p>
       <button id="ai-review" type="button" class="secondary" hidden>Проверить модели и подготовить ZIP</button>
     </form>
+    </details>
   </main>
   <script src="/admin.js" defer></script>
   <script src="/admin-jobs.js" defer></script>

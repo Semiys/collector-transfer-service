@@ -26,11 +26,11 @@ function createGate() {
   };
 }
 
-export function createAiService({ store, fetchImpl = fetch }) {
+export function createAiService({ store, fetchImpl = fetch, now = Date.now }) {
   const usage = new Map();
   const acquire = createGate();
   function state(id) {
-    const time = Date.now();
+    const time = now();
     const current = usage.get(id) ?? { minuteStart: time, minuteCount: 0, dayStart: time, dayCount: 0, cooldownUntil: 0 };
     if (time - current.minuteStart >= 60_000) { current.minuteStart = time; current.minuteCount = 0; }
     if (time - current.dayStart >= 86_400_000) { current.dayStart = time; current.dayCount = 0; }
@@ -66,7 +66,7 @@ export function createAiService({ store, fetchImpl = fetch }) {
       if (JSON.stringify(publicRoute(accounts)) !== JSON.stringify(route.accounts)) {
         throw new Error('Участники обработки изменились. Создайте новое задание после повторного согласия.');
       }
-      const available = accounts.filter((account) => state(account.id).cooldownUntil <= Date.now());
+      const available = accounts.filter((account) => state(account.id).cooldownUntil <= now());
       const near = (account) => { const item = state(account.id); return item.minuteCount >= 18 || item.dayCount >= 45; };
       const order = route.consentToAccountSwitch ?
         [...available.filter((item) => !near(item)), ...available.filter(near)] : available;
@@ -83,11 +83,13 @@ export function createAiService({ store, fetchImpl = fetch }) {
         } catch (error) {
           signal?.throwIfAborted();
           if (!(error instanceof OpenRouterRateLimitError)) throw error;
-          current.cooldownUntil = Date.now() + error.retryAfterMs;
+          current.cooldownUntil = now() + error.retryAfterMs;
+          current.rateLimit = { ...error.details };
           if (!route.consentToAccountSwitch) throw error;
         }
       }
-      throw new OpenRouterRateLimitError(60_000);
+      const earliest = accounts.map((account) => state(account.id)).sort((a, b) => a.cooldownUntil - b.cooldownUntil)[0];
+      throw new OpenRouterRateLimitError(Math.max(5_000, earliest.cooldownUntil - now()), earliest.rateLimit);
     } finally { release(); }
   }
   return { approve, run };

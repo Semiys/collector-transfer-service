@@ -106,6 +106,7 @@ test('AI API uses only the explicitly selected enabled account', async () => {
     rateLimited = true;
     const limited = await fetch(url, { method: 'POST', headers, body });
     assert.equal(limited.status, 429);
+    assert.equal(limited.headers.get('retry-after'), '300');
     assert.match((await limited.json()).error, /ограничил частоту/);
     assert.equal(calls, 2);
     await store.setEnabled(account.id, false);

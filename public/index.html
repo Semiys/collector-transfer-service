@@ -11,58 +11,95 @@
 <body>
   <main>
     <header class="site-header">
-      <a class="site-brand" href="/">Хаб Коллекционера</a>
-      <nav class="site-actions" aria-label="Навигация">
+      <a class="site-brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span>Хаб Коллекционера<small>Перенос коллекций</small></span></a>
+      <div class="site-actions">
         <button class="theme-toggle" type="button" data-theme-toggle>Тема</button>
         <a class="header-link" href="/admin">Вход</a>
+      </div>
+      <nav class="site-nav" aria-label="Разделы сайта">
+        <a href="/#free-transfer" aria-current="page">Перенос коллекции</a><a href="/guide">Инструкция</a><a href="/processing">Обработка данных</a>
       </nav>
     </header>
     <section class="hero" aria-labelledby="page-title">
-      <span class="eyebrow">Перенос коллекции в DomCollection</span>
-      <h1 id="page-title">Ваши модели — в одном приложении</h1>
-      <p>Загрузите таблицу или текстовый список, проверьте найденные модели и получите ZIP для импорта. Выберите удобный способ переноса.</p>
+      <span class="eyebrow">Для коллекционеров</span>
+      <h1 id="page-title">Перенесите свою коллекцию<br>в Дом Коллекционера</h1>
+      <p>Из таблицы или списка — в мобильное приложение. Добавьте данные, проверьте модели и скачайте готовый архив.</p>
     </section>
 
     <div class="path-grid">
       <section class="path-card">
-        <span class="badge">Бесплатно</span>
-        <h2>Перенести самому</h2>
-        <p>Сайт разберёт понятные CSV, XLSX, JSON и TXT. Для сложного текста есть пошаговая инструкция с готовым запросом к DeepSeek.</p>
-        <div class="actions"><a class="action" href="#free-transfer">Начать бесплатно</a><a class="action secondary" href="/guide">Открыть инструкцию</a></div>
+        <div class="mode-title"><h2>Самостоятельно</h2><span class="badge">Бесплатно</span></div>
+        <p>Для таблиц и готовых списков. Вы проверяете поля, сайт собирает архив.</p>
+        <a class="action" href="#free-transfer">Добавить коллекцию <span aria-hidden="true">↓</span></a>
       </section>
       <section class="path-card paid">
-        <span class="badge">Планируемая услуга · 149 ₽</span>
-        <h2>Автоматический перенос</h2>
-        <p>Загрузите исходник, а сервис подготовит данные с помощью ИИ. Перед скачиванием вы проверите все модели. Оплата и публичное распознавание ещё разрабатываются.</p>
-        <a class="action" href="/automatic">Посмотреть, как это будет</a>
+        <div class="mode-title"><h2>С помощью ИИ</h2><span class="badge">Скоро · 149 ₽</span></div>
+        <p>Для сложных таблиц и свободного текста. Пока доступны описание и условия.</p>
+        <a class="action secondary" href="/automatic">Об автоматическом переносе <span aria-hidden="true">→</span></a>
       </section>
     </div>
 
     <section id="free-transfer" aria-labelledby="free-title">
-      <h2 id="free-title" class="section-heading">Бесплатный перенос</h2>
-      <p class="section-intro">Файлы обрабатываются при запросе и не сохраняются в сервисе. Сейчас доступно до 300 моделей и 8 МБ входного файла.</p>
-
-    <section class="panel">
-      <label for="source-file">Файл коллекции
-        <input id="source-file" type="file" accept=".csv,.xlsx,.json,.txt">
-      </label>
-      <p class="note">Можно вставить список вида «A01 Название — описание» или Telegram-список с заголовками и строками «• Модель — описание». Если обычный разбор не подходит, используйте <a href="/guide">бесплатную инструкцию с DeepSeek</a>.</p>
-      <label for="source-text">Или вставьте текст / JSON из DeepSeek
-        <textarea id="source-text" placeholder="Структурированный список или JSON, который выдал DeepSeek"></textarea>
-      </label>
-      <p><button id="parse-text" type="button">Разобрать список</button> <button id="parse-json" type="button">Проверить JSON из DeepSeek</button></p>
-      <p id="status" class="status" role="status" aria-live="polite"></p>
-    </section>
+      <div class="transfer-workspace">
+      <section class="panel source-panel">
+        <span class="eyebrow">Шаг 01</span>
+        <h2 id="free-title">Добавьте данные коллекции</h2>
+        <p class="section-intro">Выберите файл на устройстве или вставьте текст.</p>
+        <div class="source-methods" aria-label="Способ добавления данных">
+          <button id="method-file" type="button" aria-pressed="true" aria-controls="file-source">Загрузить файл</button>
+          <button id="method-text" type="button" aria-pressed="false" aria-controls="text-source">Вставить текст</button>
+        </div>
+        <div id="file-source" class="source-area">
+          <div class="upload-field">
+            <span class="file-symbol" aria-hidden="true">↑</span>
+            <label for="source-file">Таблица или список моделей
+              <input id="source-file" type="file" accept=".csv,.xlsx,.json,.txt" aria-describedby="file-hint">
+            </label>
+            <p id="file-hint" class="note">Excel (.xlsx), CSV, JSON или TXT<br>До 8 МБ и 300 моделей за один перенос</p>
+          </div>
+          <p class="note">После выбора файла появятся найденные модели. Перед скачиванием можно проверить соответствие столбцов.</p>
+        </div>
+        <div id="text-source" class="source-area" hidden>
+          <label for="text-format">Что вы вставляете?
+            <select id="text-format"><option value="text">Список моделей или сообщения Telegram</option><option value="json">JSON — готовый ответ нейросети</option></select>
+          </label>
+          <label for="source-text">Текст коллекции
+            <textarea id="source-text" placeholder="A01 Corvette — Hot Wheels, 1969, цена 550 рублей&#10;A02 Mustang — Matchbox, цена 700 рублей"></textarea>
+          </label>
+          <p class="note">Для свободного текста сначала воспользуйтесь инструкцией с готовым запросом к нейросети.</p>
+          <button id="parse-text" type="button">Проверить список</button>
+          <button id="parse-json" type="button" hidden>Проверить JSON из DeepSeek</button>
+        </div>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+      </section>
+      <aside class="transfer-help" aria-label="Порядок переноса и помощь">
+        <section class="panel journey-panel">
+          <h3>Как проходит перенос</h3>
+          <ol class="transfer-journey">
+            <li id="journey-source" aria-current="step"><span>01</span><div><strong>Добавьте данные</strong><p>Файл или текстовый список</p></div></li>
+            <li id="journey-review"><span>02</span><div><strong>Проверьте модели</strong><p>Названия, цены и остальные поля</p></div></li>
+            <li id="journey-result"><span>03</span><div><strong>Скачайте ZIP</strong><p>Импортируйте его в приложении</p></div></li>
+          </ol>
+        </section>
+        <section class="panel help-panel">
+          <h3>Необычная таблица?</h3>
+          <p>Поможем подготовить её через нейросеть. В инструкции есть готовый запрос и каждый шаг.</p>
+          <a class="action secondary" href="/guide">Открыть инструкцию <span aria-hidden="true">→</span></a>
+        </section>
+        <p class="privacy-note"><span aria-hidden="true">○</span> Файлы не сохраняются в сервисе. Для бесплатного разбора регистрация не нужна.</p>
+      </aside>
+      </div>
 
     <section id="review" class="hidden">
-      <h2>Проверьте перенос</h2>
+      <span class="eyebrow">Шаг 02</span>
+      <h2>Проверьте модели</h2>
       <p id="summary"></p>
       <div id="text-warnings" class="panel hidden">
         <strong>Неоднозначные строки</strong>
         <ul id="warning-list"></ul>
         <label><input id="accept-warnings" type="checkbox"> Я проверил эти строки и согласен продолжить</label>
       </div>
-      <div id="mappings" class="grid panel"></div>
+      <details class="mapping-details" open><summary>Соответствие столбцов</summary><p class="note">Проверьте, из какого столбца берётся каждое поле модели. «Нет столбца» означает, что его нет в источнике.</p><div id="mappings" class="grid"></div></details>
 
       <div class="grid panel">
         <label for="currency">Валюта цены в исходном файле
@@ -88,10 +125,10 @@
         <button id="free-captcha-retry" class="secondary" type="button">Повторить проверку</button>
         <p class="note">Проверка помогает защитить сервис от ботов. Содержимое коллекции в неё не передаётся. <a href="/processing" target="_blank" rel="noopener">Об обработке данных</a>.</p>
       </section>
-      <p><button id="download" type="button" disabled>Скачать ZIP для DomCollection</button></p>
+      <div class="download-bar"><div><span class="eyebrow">Шаг 03</span><strong>Архив для мобильного приложения</strong><p class="note">После скачивания: Профиль → Импорт коллекции → выберите ZIP.</p></div><button id="download" type="button" disabled>Скачать ZIP для DomCollection <span aria-hidden="true">↓</span></button></div>
     </section>
     </section>
-    <footer class="site-footer">Хаб Коллекционера · ZIP подходит для импорта в DomCollection. Перед импортом проверьте данные.</footer>
+    <footer class="site-footer"><span>Хаб Коллекционера · Для приложения «Дом Коллекционера»</span><a href="/processing">Обработка данных</a></footer>
   </main>
   <script>
     const fields = { name: 'Название модели', brand: 'Бренд', scale: 'Масштаб', category: 'Категория', tags: 'Теги', price: 'Цена покупки', purchaseDate: 'Дата покупки', notes: 'Заметки', photoUrl: 'Ссылка на личное фото' };
@@ -108,6 +145,35 @@
     let eurRate;
     let selectedFile;
     let converting = false;
+    let previewVersion = 0;
+    function setJourney(step) {
+      for (const name of ['source', 'review', 'result']) {
+        const item = document.getElementById(`journey-${name}`);
+        if (name === step) item.setAttribute('aria-current', 'step');
+        else item.removeAttribute('aria-current');
+      }
+    }
+    function setSourceMethod(method) {
+      if (document.getElementById(`method-${method}`).getAttribute('aria-pressed') === 'true') return;
+      previewVersion += 1; fileInput.value = '';
+      document.getElementById('file-source').hidden = method !== 'file';
+      document.getElementById('text-source').hidden = method !== 'text';
+      document.getElementById('method-file').setAttribute('aria-pressed', String(method === 'file'));
+      document.getElementById('method-text').setAttribute('aria-pressed', String(method === 'text'));
+      review.classList.add('hidden'); preview = null; selectedFile = null;
+      download.disabled = true; captcha.reset(); setJourney('source'); showStatus('');
+    }
+    document.getElementById('method-file').addEventListener('click', () => setSourceMethod('file'));
+    document.getElementById('method-text').addEventListener('click', () => setSourceMethod('text'));
+    const textFormat = document.getElementById('text-format');
+    function updateTextFormat() {
+      const json = textFormat.value === 'json';
+      document.getElementById('parse-text').hidden = json;
+      document.getElementById('parse-json').hidden = !json;
+      textInput.placeholder = json ? 'Вставьте весь JSON-ответ: от первой [ или { до последней ] или }' :
+        'A01 Corvette — Hot Wheels, 1969, цена 550 рублей\nA02 Mustang — Matchbox, цена 700 рублей';
+    }
+    textFormat.addEventListener('change', updateTextFormat);
     const captcha = CollectorCaptcha.mount({ container: document.getElementById('free-captcha'),
       status: document.getElementById('free-captcha-status'), action: 'collection_zip',
       onChange: (token) => { download.disabled = converting || !preview || !token; } });
@@ -163,7 +229,9 @@
     }
 
     async function preparePreview(file) {
+      const version = ++previewVersion;
       review.classList.add('hidden'); preview = null; eurRate = null;
+      download.disabled = true; setJourney('source');
       captcha.reset();
       document.getElementById('confirm-preview').checked = false;
       selectedFile = file;
@@ -173,6 +241,7 @@
       try {
         const response = await fetch('/api/preview', { method: 'POST', body: form });
         const data = await response.json();
+        if (version !== previewVersion) return;
         if (!response.ok) throw new Error(data.error);
         preview = data;
         document.getElementById('summary').textContent = `Найдено моделей: ${data.rowCount}. Ниже показаны ${data.rows.length === data.rowCount ? 'все записи' : `первые ${data.rows.length}`}. ${data.type === 'ai-json' ? 'Результат создан ИИ: проверьте каждую строку, особенно цену, валюту и дату покупки.' : ''}`;
@@ -206,11 +275,17 @@
         }
         currency.value = data.priceCurrency === 'UNKNOWN' ? '' : data.priceCurrency;
         renderRows(); review.classList.remove('hidden'); showStatus('Проверьте столбцы и модели.');
+        setJourney('review');
+        review.scrollIntoView({ block: 'start' });
         captcha.initialize();
         await updateRate();
-      } catch (error) { showStatus(error.message, 'error'); }
+      } catch (error) { if (version === previewVersion) showStatus(error.message, 'error'); }
     }
     fileInput.addEventListener('change', () => preparePreview(fileInput.files[0]));
+    if (location.hash === '#paste') {
+      setSourceMethod('text'); textFormat.value = 'json'; updateTextFormat();
+      document.getElementById('free-transfer').scrollIntoView({ block: 'start' });
+    }
     const aiImport = sessionStorage.getItem('collector-ai-import');
     if (aiImport) {
       sessionStorage.removeItem('collector-ai-import');
@@ -275,6 +350,7 @@
         const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'dom_collection_transfer.zip'; anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 60_000);
         const failed = response.headers.get('X-Photo-Failed-Rows');
+        setJourney('result');
         showStatus(failed ? `ZIP готов. Фото не загрузились в строках: ${failed}; для них добавлены заглушки.` : 'ZIP готов к импорту в DomCollection.', 'success');
       } catch (error) { showStatus(error.message, 'error'); }
       finally { converting = false; captcha.reset(); }
