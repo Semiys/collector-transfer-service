@@ -1,5 +1,7 @@
 import { parseInput } from '../transfer/parse-input.js';
 import { JobError } from './store.js';
+import { GroqRateLimitError } from '../ai/groq.js';
+import { setTimeout as delay } from 'node:timers/promises';
 
 export async function prepareSource({ filename, bytes }) {
   let records;
@@ -34,7 +36,9 @@ export async function prepareSource({ filename, bytes }) {
     'Номера непустых записей таблицы, начиная с 1, без строки названий столбцов.' };
 }
 
-export function createRecognitionWorker(aiService) {
+export function createRecognitionWorker(aiService, {
+  waitForRetry = (milliseconds, signal) => delay(milliseconds, undefined, { signal }), now = Date.now,
+} = {}) {
   return async ({ source, route, signal, progress, releaseSource = () => {} }) => {
     const { records, chunks, numbering, sourceFormat = 'text' } = source.prepared ?? await prepareSource(source);
     source = null;
@@ -45,9 +49,25 @@ export function createRecognitionWorker(aiService) {
     progress({ total: chunks.length, sourceCount: records.length });
     for (let index = 0; index < chunks.length; index += 1) {
       signal.throwIfAborted();
-      let part;
-      try { part = await aiService.run({ route, records: chunks[index], sourceFormat, context, signal }); }
-      catch (error) { signal.throwIfAborted(); throw new JobError(`Часть ${index + 1}: ${error.message}`); }
+      let part, retries = 0;
+      while (!part) {
+        signal.throwIfAborted();
+        try { part = await aiService.run({ route, records: chunks[index], sourceFormat, context, signal }); }
+        catch (error) {
+          signal.throwIfAborted();
+          // Retry only an explicit short 429 pause, never malformed results or timeouts.
+          if (!(error instanceof GroqRateLimitError) || !error.details.retryAfterProvided ||
+            !Number.isFinite(error.retryAfterMs) || error.retryAfterMs < 0 || error.retryAfterMs > 60_000 || retries >= 2) {
+            progress({ retryAt: 0, retryPart: 0 });
+            throw new JobError(`Часть ${index + 1}: ${error.message}`);
+          }
+          retries += 1;
+          progress({ retryAt: now() + error.retryAfterMs, retryPart: index + 1, retryAttempt: retries });
+          await waitForRetry(error.retryAfterMs, signal);
+          signal.throwIfAborted();
+          progress({ retryAt: 0, retryPart: 0 });
+        }
+      }
       models.push(...part.models);
       if (models.length > 300) throw new JobError('Распознано больше 300 моделей. Разделите источник.');
       warnings.push(...part.warnings);
@@ -57,7 +77,7 @@ export function createRecognitionWorker(aiService) {
         if (item.kind === 'section') context = (context + '\n' + original.text).slice(-2000);
       }
       diagnostics.push({ part: index + 1, modelUsed: part.modelUsed, keyUsed: part.keyUsed, fallbackUsed: part.fallbackUsed });
-      progress({ completed: index + 1, modelCount: models.length });
+      progress({ completed: index + 1, modelCount: models.length, retryAt: 0, retryPart: 0 });
     }
     if (!models.length) {
       const sections = unassigned.filter((item) => item.kind === 'section').length;

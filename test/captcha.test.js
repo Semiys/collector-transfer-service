@@ -64,3 +64,24 @@ test('official dummy keys require explicit local test mode and are refused in pr
   assert.equal(calls, 0);
   await captcha.verify({ ...request, hostname: '127.0.0.1', ip: '127.0.0.1' });
 });
+
+test('loopback-published Docker testing explicitly allows private transport IPs only', async () => {
+  const testing = { NODE_ENV: 'development', TURNSTILE_TEST_MODE: 'true', TURNSTILE_TEST_DOCKER_LOCAL: 'true',
+    TURNSTILE_SITE_KEY: '1x00000000000000000000AA',
+    TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA', TURNSTILE_HOSTNAMES: 'localhost,127.0.0.1' };
+  let calls = 0;
+  const fetchImpl = async () => { calls += 1; return Response.json({ success: true, hostname: 'localhost', action: 'test' }); };
+  const captcha = createTurnstile({ env: testing, fetchImpl });
+  for (const ip of ['172.17.0.1', '192.168.65.1', '10.0.2.2', '::ffff:172.18.0.1']) {
+    await captcha.verify({ ...request, hostname: 'localhost', ip });
+  }
+  assert.equal(calls, 4); // The server still validates every token with Siteverify.
+  for (const ip of ['192.0.2.7', '172.15.0.1', '172.32.0.1', '10.999.0.1', undefined]) {
+    await assert.rejects(captcha.verify({ ...request, hostname: 'localhost', ip }), /по этому адресу/);
+  }
+  await assert.rejects(captcha.verify({ ...request, hostname: 'attacker.example', ip: '172.17.0.1' }));
+  await assert.rejects(createTurnstile({ env: { ...testing, TURNSTILE_TEST_DOCKER_LOCAL: 'false' }, fetchImpl })
+    .verify({ ...request, hostname: 'localhost', ip: '172.17.0.1' }));
+  assert.equal(createTurnstile({ env: { ...testing, NODE_ENV: 'production' } }).publicConfig().configured, false);
+  assert.equal(calls, 4);
+});

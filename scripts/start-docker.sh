@@ -29,4 +29,4 @@ sed -n 's/^ADMIN_ACCESS_TOKEN=//p' .env
 printf 'Не отправляйте этот код и файл .env в чат или Git.\n\n'
 
 docker run --rm -p 127.0.0.1:8080:8080 --env-file .env \
-  -v collector-transfer-data:/app/data "$image"
+  -e TURNSTILE_TEST_DOCKER_LOCAL=true -v collector-transfer-data:/app/data "$image"

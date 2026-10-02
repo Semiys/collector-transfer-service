@@ -118,6 +118,9 @@
       const progress = document.createElement('progress'); progress.max = job.progress.total || 1; progress.value = job.progress.completed;
       card.append(progress);
       line(card, `Части: ${job.progress.completed}/${job.progress.total || '…'}. Исходных строк: ${job.progress.sourceCount}. Распознано моделей: ${job.progress.modelCount}.`);
+      if (job.status === 'running' && job.progress.retryAt) {
+        line(card, `Временный лимит запросов. Часть ${job.progress.retryPart} повторится автоматически не раньше ${new Date(job.progress.retryAt).toLocaleTimeString('ru-RU')}. Повтор ${job.progress.retryAttempt} из 2. Готовые части остаются в памяти; можно отменить задание.`);
+      }
       if (['queued', 'running', 'ready'].includes(job.status)) line(card, `Доступно до ${new Date(job.expiresAt).toLocaleTimeString('ru-RU')}.`);
       if (job.error) line(card, job.error);
       const actions = document.createElement('div'); actions.className = 'actions';

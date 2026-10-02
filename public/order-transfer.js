@@ -130,7 +130,9 @@ export function createOrderTransfer({ onOrderChange, onAccessUnavailable }) {
     else progress.removeAttribute('value');
     progress.hidden = !['queued', 'running'].includes(job.status);
     get('order-job-detail').textContent = job.settling ? 'Обработка останавливается. Дождитесь сохранения статуса перед повтором.' :
-      job.error || (job.progress.total ? `Частей: ${job.progress.completed} из ${job.progress.total}. Найдено моделей: ${job.progress.modelCount}.` : 'Задание принято.');
+      job.error || (job.progress.retryAt && job.status === 'running' ?
+        `Временный лимит запросов. Часть ${job.progress.retryPart} повторится автоматически не раньше ${new Date(job.progress.retryAt).toLocaleTimeString('ru-RU')}. Найдено моделей: ${job.progress.modelCount}. Можно остановить обработку.` :
+        job.progress.total ? `Частей: ${job.progress.completed} из ${job.progress.total}. Найдено моделей: ${job.progress.modelCount}.` : 'Задание принято.');
     get('order-job-expiry').textContent = active() ?
       `${job.status === 'ready' ? 'Результат доступен' : 'Обработка ограничена по времени'} до ${new Date(job.expiresAt).toLocaleTimeString('ru-RU')}.` : '';
   }

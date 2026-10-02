@@ -5,6 +5,13 @@ const TEST_SECRET_KEYS = new Set(['1x0000000000000000000000000000000AA',
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
 const LOCAL_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
+function privateTransportIp(value) {
+  const ip = typeof value === 'string' ? value.replace(/^::ffff:/i, '') : '';
+  if (!isIPv4(ip)) return false;
+  const [first, second] = ip.split('.').map(Number);
+  return first === 10 || (first === 172 && second >= 16 && second <= 31) || (first === 192 && second === 168);
+}
+
 export class CaptchaError extends Error {
   constructor(message, statusCode = 403) {
     super(message);
@@ -16,6 +23,8 @@ export function createTurnstile({ env = process.env, fetchImpl = fetch } = {}) {
   const siteKey = (env.TURNSTILE_SITE_KEY ?? '').trim();
   const secretKey = (env.TURNSTILE_SECRET_KEY ?? '').trim();
   const testMode = env.TURNSTILE_TEST_MODE === 'true';
+  // The local Docker launchers publish only to 127.0.0.1; NAT may change the transport IP.
+  const dockerLocalTest = env.TURNSTILE_TEST_DOCKER_LOCAL === 'true';
   const hostnames = [...new Set((env.TURNSTILE_HOSTNAMES ?? '').split(',')
     .map((value) => value.trim().toLowerCase()).filter(Boolean))];
   const dummyKeys = TEST_SITE_KEYS.has(siteKey) || TEST_SECRET_KEYS.has(secretKey);
@@ -34,7 +43,7 @@ export function createTurnstile({ env = process.env, fetchImpl = fetch } = {}) {
         throw new CaptchaError('Пройдите проверку, что вы человек.');
       }
       if (!hostnames.includes(String(hostname).toLowerCase()) ||
-        (testMode && !LOCAL_IPS.has(ip))) {
+        (testMode && !LOCAL_IPS.has(ip) && !(dockerLocalTest && privateTransportIp(ip)))) {
         throw new CaptchaError('Проверка человека недоступна по этому адресу.');
       }
       let result;
@@ -61,3 +70,4 @@ export function createTurnstile({ env = process.env, fetchImpl = fetch } = {}) {
     },
   };
 }
+import { isIPv4 } from 'node:net';

@@ -30,7 +30,7 @@ try {
     Write-Host "Админ-код для входа: $($adminToken[0].Substring('ADMIN_ACCESS_TOKEN='.Length))"
     Write-Host 'Не отправляйте этот код и файл .env в чат или Git.'
     Write-Host ''
-    docker run --rm -p '127.0.0.1:8080:8080' --env-file $envPath -v 'collector-transfer-data:/app/data' $imageName
+    docker run --rm -p '127.0.0.1:8080:8080' --env-file $envPath -e 'TURNSTILE_TEST_DOCKER_LOCAL=true' -v 'collector-transfer-data:/app/data' $imageName
     if ($LASTEXITCODE -ne 0) { throw 'Контейнер завершился с ошибкой.' }
 }
 finally {
