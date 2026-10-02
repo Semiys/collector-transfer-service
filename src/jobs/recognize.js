@@ -75,7 +75,7 @@ export function createRecognitionWorker(aiService) {
     if (unassigned.length) warnings.push(`Строки без модели: ${unassigned.length}, включая заголовки. Проверьте сверку перед переносом.`);
     const uniqueWarnings = [...new Set(warnings)];
     if (uniqueWarnings.length > 200) uniqueWarnings.splice(199, Infinity, 'Замечаний больше 200. Особенно внимательно проверьте все модели и исходные строки.');
-    return { transferSource: 'openrouter-ai-v1', priceCurrency,
+    return { transferSource: 'groq-ai-v1', priceCurrency,
       models: models.map(({ currency, sourceIds, ...item }) => item), warnings: uniqueWarnings,
       audit: { numbering, sourceCount: records.length, assignedCount: records.length - unassigned.length,
         modelSources: models.map((item, index) => ({ model: index + 1, name: item.name, sourceIds: item.sourceIds })), unassigned }, diagnostics };

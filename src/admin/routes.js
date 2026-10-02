@@ -1,5 +1,5 @@
 import express from 'express';
-import { OpenRouterRateLimitError } from '../ai/openrouter.js';
+import { GroqRateLimitError } from '../ai/groq.js';
 import { createAiService } from '../ai/service.js';
 import { rateLimit } from '../http/limits.js';
 import { getKeyStatus } from '../ai/key-status.js';
@@ -23,7 +23,7 @@ export function createAdminRouter({ store, auth, fetchImpl = fetch, aiFetchImpl 
       const route = await aiService.approve(request.body ?? {});
       response.json(await aiService.run({ route, text: request.body?.text }));
     } catch (error) {
-      if (error instanceof OpenRouterRateLimitError) {
+      if (error instanceof GroqRateLimitError) {
         const seconds = Math.ceil(error.retryAfterMs / 1000);
         response.set('Retry-After', String(seconds)).status(429).json({ error: error.message,
           retryAfterSeconds: seconds, limitSource: error.details.source });

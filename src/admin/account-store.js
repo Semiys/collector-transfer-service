@@ -5,14 +5,24 @@ import path from 'node:path';
 const FILE_NAME = 'openrouter-accounts.enc.json';
 const AAD = Buffer.from('collector-transfer-service:openrouter-accounts:v1');
 
+// Preserve the existing encrypted volume, but never send legacy provider keys to Groq.
+function compatible(account) {
+  return account.provider === 'groq' && /^gsk_[A-Za-z0-9_-]{16,508}$/.test(account.apiKey ?? '');
+}
+
+function requireGroq(account) {
+  if (!compatible(account)) throw new Error('Этот ключ относится к старому провайдеру. Добавьте новый API-ключ Groq.');
+}
+
 function publicAccount(account) {
   const { apiKey, ...rest } = account;
-  return { ...rest, keyPreview: `••••${apiKey.slice(-4)}` };
+  return { ...rest, provider: account.provider ?? 'openrouter', compatible: compatible(account),
+    enabled: account.enabled && compatible(account), keyPreview: `••••${apiKey.slice(-4)}` };
 }
 
 export function createAccountStore({ dataDir, encryptionKey }) {
   if (!/^[a-fA-F0-9]{64}$/.test(encryptionKey ?? '')) {
-    throw new Error('OPENROUTER_KEY_ENC_KEY должен содержать 64 шестнадцатеричных символа');
+    throw new Error('AI_KEY_ENC_KEY должен содержать 64 шестнадцатеричных символа');
   }
   const key = Buffer.from(encryptionKey, 'hex');
   const filePath = path.join(dataDir, FILE_NAME);
@@ -80,12 +90,14 @@ export function createAccountStore({ dataDir, encryptionKey }) {
       await queue;
       const account = (await readAccounts()).find((item) => item.id === id);
       if (!account) throw new Error('Ключ не найден');
+      requireGroq(account);
       return account.apiKey;
     },
     async getEnabledKey(id) {
       await queue;
       const account = (await readAccounts()).find((item) => item.id === id);
       if (!account) throw new Error('Ключ не найден');
+      requireGroq(account);
       if (!account.enabled) throw new Error('Выбранный ключ выключен');
       return account.apiKey;
     },
@@ -94,10 +106,11 @@ export function createAccountStore({ dataDir, encryptionKey }) {
       const accounts = await readAccounts();
       const primary = accounts.find((item) => item.id === primaryId);
       if (!primary) throw new Error('Ключ не найден');
+      requireGroq(primary);
       if (!primary.enabled) throw new Error('Выбранный ключ выключен');
       const owners = new Set([primary.owner.trim().toLocaleLowerCase('ru')]);
       const fallback = accounts.filter((item) => {
-        if (!item.enabled || item.id === primaryId) return false;
+        if (!item.enabled || !compatible(item) || item.id === primaryId) return false;
         const owner = item.owner.trim().toLocaleLowerCase('ru');
         if (owners.has(owner)) return false;
         owners.add(owner);
@@ -113,14 +126,14 @@ export function createAccountStore({ dataDir, encryptionKey }) {
       if (!normalizedOwner || normalizedOwner.length > 80 || !normalizedLabel || normalizedLabel.length > 80) {
         throw new Error('Укажите владельца и название ключа (до 80 символов)');
       }
-      if (normalizedKey.length < 20 || normalizedKey.length > 512 || /\s/.test(normalizedKey)) {
-        throw new Error('Введите корректный API-ключ OpenRouter');
+      if (!/^gsk_[A-Za-z0-9_-]{16,508}$/.test(normalizedKey)) {
+        throw new Error('Введите корректный API-ключ Groq');
       }
       return mutate((accounts) => {
         if (accounts.length >= 30) throw new Error('В панели можно хранить не более 30 ключей');
         if (accounts.some((item) => item.apiKey === normalizedKey)) throw new Error('Этот API-ключ уже добавлен');
         const account = { id: randomUUID(), owner: normalizedOwner, label: normalizedLabel,
-          apiKey: normalizedKey, enabled: true, createdAt: new Date().toISOString() };
+          apiKey: normalizedKey, provider: 'groq', enabled: true, createdAt: new Date().toISOString() };
         accounts.push(account);
         return publicAccount(account);
       });
@@ -130,6 +143,7 @@ export function createAccountStore({ dataDir, encryptionKey }) {
       return mutate((accounts) => {
         const account = accounts.find((item) => item.id === id);
         if (!account) throw new Error('Ключ не найден');
+        if (enabled) requireGroq(account);
         account.enabled = enabled;
         return publicAccount(account);
       });

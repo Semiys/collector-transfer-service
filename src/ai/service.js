@@ -1,4 +1,4 @@
-import { OpenRouterRateLimitError, recognizeCollectionText, recognizeCollectionRecords } from './openrouter.js';
+import { GroqRateLimitError, recognizeCollectionText, recognizeCollectionRecords } from './groq.js';
 
 // One upstream request at a time, shared by short requests and background jobs.
 function createGate() {
@@ -31,15 +31,13 @@ export function createAiService({ store, fetchImpl = fetch, now = Date.now }) {
   const acquire = createGate();
   function state(id) {
     const time = now();
-    const current = usage.get(id) ?? { minuteStart: time, minuteCount: 0, dayStart: time, dayCount: 0, cooldownUntil: 0 };
-    if (time - current.minuteStart >= 60_000) { current.minuteStart = time; current.minuteCount = 0; }
-    if (time - current.dayStart >= 86_400_000) { current.dayStart = time; current.dayCount = 0; }
+    const current = usage.get(id) ?? { cooldownUntil: 0 };
     if (usage.size > 100) usage.delete(usage.keys().next().value);
     usage.set(id, current);
     return current;
   }
   async function accountsFor({ accountId, consentToAccountSwitch, fallbackAccountIds }) {
-    if (typeof accountId !== 'string' || !accountId) throw new Error('Выберите включённый ключ OpenRouter');
+    if (typeof accountId !== 'string' || !accountId) throw new Error('Выберите включённый ключ Groq');
     if (!store) throw new Error('Админ-панель не настроена на сервере');
     const accounts = (await store.getEnabledAccounts(accountId)).slice(0, consentToAccountSwitch === true ? 3 : 1);
     if (consentToAccountSwitch === true) {
@@ -67,13 +65,12 @@ export function createAiService({ store, fetchImpl = fetch, now = Date.now }) {
         throw new Error('Участники обработки изменились. Создайте новое задание после повторного согласия.');
       }
       const available = accounts.filter((account) => state(account.id).cooldownUntil <= now());
-      const near = (account) => { const item = state(account.id); return item.minuteCount >= 18 || item.dayCount >= 45; };
-      const order = route.consentToAccountSwitch ?
-        [...available.filter((item) => !near(item)), ...available.filter(near)] : available;
+      // Groq quotas belong to organizations, including requests made outside this service.
+      // Local request counts cannot predict those quotas; retry only after an actual 429.
+      const order = available;
       for (const account of order) {
         signal?.throwIfAborted();
         const current = state(account.id);
-        current.minuteCount += 1; current.dayCount += 1;
         try {
           const options = { apiKey: account.apiKey, fetchImpl, signal };
           const result = records ? await recognizeCollectionRecords({ ...options, records, context }) :
@@ -82,14 +79,14 @@ export function createAiService({ store, fetchImpl = fetch, now = Date.now }) {
             fallbackUsed: account.id !== route.accountId };
         } catch (error) {
           signal?.throwIfAborted();
-          if (!(error instanceof OpenRouterRateLimitError)) throw error;
+          if (!(error instanceof GroqRateLimitError)) throw error;
           current.cooldownUntil = now() + error.retryAfterMs;
           current.rateLimit = { ...error.details };
           if (!route.consentToAccountSwitch) throw error;
         }
       }
       const earliest = accounts.map((account) => state(account.id)).sort((a, b) => a.cooldownUntil - b.cooldownUntil)[0];
-      throw new OpenRouterRateLimitError(Math.max(5_000, earliest.cooldownUntil - now()), earliest.rateLimit);
+      throw new GroqRateLimitError(Math.max(5_000, earliest.cooldownUntil - now()), earliest.rateLimit);
     } finally { release(); }
   }
   return { approve, run };

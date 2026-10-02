@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import express from 'express';
 import { unzipSync } from 'fflate';
-import { OpenRouterRateLimitError, recognizeCollectionText } from '../src/ai/openrouter.js';
+import { GroqRateLimitError, recognizeCollectionText } from '../src/ai/groq.js';
 import { createAccountStore } from '../src/admin/account-store.js';
 import { createAdminRouter } from '../src/admin/routes.js';
 import { createAdminSession } from '../src/admin/session.js';
@@ -13,7 +13,7 @@ import { parseInput } from '../src/transfer/parse-input.js';
 import { suggestMapping } from '../src/transfer/mapping.js';
 import { buildArchive } from '../src/transfer/build-archive.js';
 
-const apiKey = `sk-or-v1-${'b'.repeat(64)}`;
+const apiKey = `gsk_${'b'.repeat(64)}`;
 const aiResult = {
   models: [{ name: 'A01 Classic Bird', brand: 'Hot Wheels', scale: '1:64', category: 'Автомобили',
     price: '7.30', purchaseDate: '', notes: 'Синий', photoUrl: '', tags: ['Год выпуска: 1969'] }],
@@ -27,15 +27,20 @@ test('AI result reaches the existing reviewed JSON to ZIP path', async () => {
       sent = { url, options };
       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(aiResult) } }] }), { status: 200 });
     } });
-  assert.equal(sent.url, 'https://openrouter.ai/api/v1/chat/completions');
+  assert.equal(sent.url, 'https://api.groq.com/openai/v1/chat/completions');
   assert.equal(sent.options.headers.Authorization, `Bearer ${apiKey}`);
   const body = JSON.parse(sent.options.body);
-  assert.equal(body.model, 'nvidia/nemotron-3-super-120b-a12b:free');
-  assert.deepEqual(body.plugins, [{ id: 'response-healing' }]);
+  assert.equal(body.model, 'openai/gpt-oss-20b');
+  assert.equal(body.plugins, undefined);
   assert.equal(body.response_format.type, 'json_schema');
-  assert.equal(body.provider.require_parameters, true);
-  assert.equal(result.transferSource, 'openrouter-ai-v1');
-  assert.equal(result.modelUsed, 'nvidia/nemotron-3-super-120b-a12b:free');
+  assert.equal(body.provider, undefined);
+  assert.equal(body.max_completion_tokens, 4096);
+  assert.equal(body.max_tokens, undefined);
+  assert.equal(body.reasoning_effort, 'low');
+  assert.equal(body.include_reasoning, false);
+  assert.equal(body.reasoning_format, undefined);
+  assert.equal(result.transferSource, 'groq-ai-v1');
+  assert.equal(result.modelUsed, 'openai/gpt-oss-20b');
   const parsed = await parseInput('recognized.json', Buffer.from(JSON.stringify(result)));
   assert.equal(parsed.type, 'ai-json');
   assert.equal(parsed.warnings.length, 2);
@@ -57,7 +62,7 @@ test('AI result reaches the existing reviewed JSON to ZIP path', async () => {
 test('AI rejects a rate limit and malformed model data', async () => {
   await assert.rejects(recognizeCollectionText({ text: 'A01 Classic Bird Hot Wheels', apiKey,
     fetchImpl: async () => new Response('', { status: 429, headers: { 'Retry-After': '120' } }) }),
-  (error) => error instanceof OpenRouterRateLimitError && error.retryAfterMs === 120_000);
+  (error) => error instanceof GroqRateLimitError && error.retryAfterMs === 120_000);
   await assert.rejects(recognizeCollectionText({ text: 'A01 Classic Bird Hot Wheels', apiKey,
     fetchImpl: async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({
       models: [{ name: '', price: '7', tags: [] }], warnings: [],
@@ -66,7 +71,7 @@ test('AI rejects a rate limit and malformed model data', async () => {
 
 test('AI explains a truncated response instead of a generic JSON error', async () => {
   await assert.rejects(recognizeCollectionText({ text: 'Список моделей коллекционера из нескольких сообщений', apiKey,
-    fetchImpl: async () => new Response(JSON.stringify({ model: 'nvidia/nemotron-3-super-120b-a12b:free',
+    fetchImpl: async () => new Response(JSON.stringify({ model: 'openai/gpt-oss-20b',
       choices: [{ finish_reason: 'length', message: { content: '{"models":[' } }] }), { status: 200 }) }),
   /Ответ ИИ оборвался/);
 });
@@ -124,7 +129,7 @@ test('AI switches to an approved owner only after rate limit and remembers coold
   const dataDir = await mkdtemp(path.join(os.tmpdir(), 'collector-ai-fallback-'));
   const store = createAccountStore({ dataDir, encryptionKey: '5'.repeat(64) });
   const primary = await store.add({ owner: 'Анна', label: 'Первый', apiKey, consent: true });
-  const reserveKey = `sk-or-v1-${'c'.repeat(64)}`;
+  const reserveKey = `gsk_${'c'.repeat(64)}`;
   const reserve = await store.add({ owner: 'Борис', label: 'Резерв', apiKey: reserveKey, consent: true });
   const calls = [];
   const app = express();

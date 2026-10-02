@@ -20,10 +20,11 @@
       <nav class="site-nav" aria-label="Разделы панели"><a href="#job-form">Распознавание</a><a href="#jobs-title">Задания</a><a href="#keys">Ключи</a><a href="#orders-title">Заказы</a></nav>
     </header>
     <section class="hero"><span class="eyebrow">Для администратора</span><h1>Панель управления</h1><p>Переносите тестовые коллекции и проверяйте результаты. Для первого запуска добавьте ключ в разделе ниже.</p></section>
-    <details class="panel key-management"><summary>Ключи распознавания · OpenRouter</summary>
-    <h2 id="keys">Ключи OpenRouter</h2>
+    <details class="panel key-management"><summary>Ключи распознавания · Groq</summary>
+    <h2 id="keys">Ключи Groq</h2>
     <p>Добавляйте только API-ключи владельцев, которые согласились участвовать. Логины и пароли не нужны. Ключи сохраняются в зашифрованном файле, а в списке видны только последние четыре символа.</p>
     <p>Выберите основной ключ. Если разрешите резервные ключи для конкретного запроса, сервис может переключиться на них при ограничении частоты. Результат нужно проверить перед созданием ZIP.</p>
+    <p>Модель пилота — <code>openai/gpt-oss-20b</code>. Создайте ключ в <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Groq Console → API Keys</a> и вставьте его целиком, без слова Bearer. Лимиты общие для организации; несколько её ключей не увеличивают квоту. Старые ключи OpenRouter выключены для распознавания.</p>
 
     <section class="panel">
       <button id="load" type="button">Обновить список ключей</button>
@@ -38,8 +39,8 @@
       <label for="label">Название ключа
         <input id="label" maxlength="80" required placeholder="Например, ключ Ивана для сервиса">
       </label>
-      <label for="api-key">API-ключ OpenRouter
-        <input id="api-key" type="password" autocomplete="off" spellcheck="false" required>
+      <label for="api-key">API-ключ Groq
+        <input id="api-key" type="password" autocomplete="off" spellcheck="false" required placeholder="gsk_…">
       </label>
       <label class="check"><input id="consent" type="checkbox" required> Владелец согласился передать этот API-ключ для работы сервиса</label>
       <button type="submit">Сохранить ключ</button>
@@ -65,7 +66,7 @@
         <textarea id="job-text" maxlength="200000" placeholder="Список моделей или сообщения из Telegram"></textarea>
       </label>
       <label class="check"><input id="job-consent" type="checkbox" required>
-        <span>Разрешаю отправить все части этой коллекции внешнему ИИ через OpenRouter для распознавания. Личные данные удалены. <a href="/processing#ai-details" target="_blank" rel="noopener">Условия обработки</a></span>
+        <span>Разрешаю отправить все части этой коллекции внешнему ИИ через Groq для распознавания. Личные данные удалены. <a href="/processing#ai-details" target="_blank" rel="noopener">Условия обработки</a></span>
       </label>
       <label class="check"><input id="job-fallback" type="checkbox" disabled>
         <span id="job-fallback-label">Выберите основной ключ. Согласие действует только для этого задания.</span>
@@ -104,7 +105,7 @@
     <details class="panel"><summary>Быстрая проверка короткого текста</summary>
     <form id="ai-form">
       <h2>Распознать свободный текст</h2>
-      <p>Для проверки вставьте небольшой список моделей или сообщения из Telegram. Текст будет отправлен бесплатной Qwen через OpenRouter. Начните с 10–20 моделей: длинный JSON-ответ может оборваться. Если в тексте есть личные данные, сначала удалите их.</p>
+      <p>Для проверки вставьте небольшой список моделей или сообщения из Telegram. Текст будет отправлен модели openai/gpt-oss-20b через Groq. Начните с 2–3 моделей: бесплатный тариф ограничивает запросы и токены. Если в тексте есть личные данные, сначала удалите их.</p>
       <label for="ai-account">Ключ для этого запроса
         <select id="ai-account" required><option value="">Сначала откройте список ключей</option></select>
       </label>

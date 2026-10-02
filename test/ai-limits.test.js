@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { setImmediate as nextTurn } from 'node:timers/promises';
-import { OpenRouterRateLimitError, recognizeCollectionText } from '../src/ai/openrouter.js';
+import { GroqRateLimitError, recognizeCollectionText } from '../src/ai/groq.js';
 import { getKeyStatus } from '../src/ai/key-status.js';
 import { createAiService } from '../src/ai/service.js';
 import { createJobStore } from '../src/jobs/store.js';
@@ -12,22 +12,20 @@ const privateText = 'Private collection Model 2, personal notes';
 const jsonResponse = (value, options = {}) => new Response(JSON.stringify(value), options);
 const result = { models: [{ name: 'Corvette', tags: [] }], warnings: [] };
 
-test('key check reports supplied daily quota without exposing other key metadata', async () => {
+test('key check validates Groq authorization and listed model without exposing other metadata', async () => {
   const status = await getKeyStatus({ apiKey: 'private-key', fetchImpl: async (url, options) => {
-    assert.equal(url, 'https://openrouter.ai/api/v1/key');
+    assert.equal(url, 'https://api.groq.com/openai/v1/models');
     assert.equal(options.headers.Authorization, 'Bearer private-key');
-    return jsonResponse({ data: { is_free_tier: true, expires_at: '2026-10-03T00:00:00Z',
-      label: 'private-key', usage: 9, free_model_daily_requests: { used: 2, limit: 50, remaining: 48 } } });
+    return jsonResponse({ data: [{ id: 'openai/gpt-oss-20b', active: true, extra: 'private-key' }] });
   } });
-  assert.deepEqual(status, { valid: true, freeTier: true, expiresAt: '2026-10-03T00:00:00.000Z',
-    freeRequestsToday: { used: 2, limit: 50, remaining: 48 } });
+  assert.deepEqual(status, { valid: true, model: 'openai/gpt-oss-20b', modelAvailable: true });
   assert.equal(JSON.stringify(status).includes('private-key'), false);
 });
 
 test('key check does not invent quota or expose malformed upstream responses', async () => {
-  for (const quota of [undefined, { used: 2, limit: 50, remaining: -1 }, { used: 2, limit: 50, remaining: '48' }]) {
-    assert.deepEqual(await getKeyStatus({ apiKey: 'key', fetchImpl: async () => jsonResponse({ data: {
-      is_free_tier: true, free_model_daily_requests: quota } }) }), { valid: true, freeTier: true, expiresAt: null });
+  for (const data of [[], [{ id: 'other-model' }], [{ id: 'openai/gpt-oss-20b', active: false }]]) {
+    assert.deepEqual(await getKeyStatus({ apiKey: 'key', fetchImpl: async () => jsonResponse({ data }) }),
+      { valid: true, model: 'openai/gpt-oss-20b', modelAvailable: false });
   }
   assert.equal((await getKeyStatus({ apiKey: 'key', fetchImpl: async () => new Response('', { status: 401 }) })).valid, false);
   await assert.rejects(getKeyStatus({ apiKey: 'key', fetchImpl: async () => new Response(privateText) }),
@@ -36,24 +34,30 @@ test('key check does not invent quota or expose malformed upstream responses', a
     large: 'x'.repeat(70_000) }) }), /некорректный ответ/);
 });
 
-test('429 diagnostics distinguish platform, provider and unknown without retaining raw errors', async () => {
+test('429 diagnostics distinguish exhausted Groq request and token counters without retaining raw errors', async () => {
   const cases = [
-    { metadata: {}, headers: { 'X-RateLimit-Limit': '20', 'X-RateLimit-Remaining': '0' }, source: 'platform' },
-    { metadata: { provider_code: 'rate_limited', raw: privateText }, headers: {}, source: 'provider' },
+    { metadata: {}, headers: { 'X-RateLimit-Limit-Requests': '1000', 'X-RateLimit-Remaining-Requests': '0' }, source: 'platform', dimension: 'requests', limit: 1000 },
+    { metadata: {}, headers: { 'X-RateLimit-Limit-Tokens': '8000', 'X-RateLimit-Remaining-Tokens': '0' }, source: 'platform', dimension: 'tokens', limit: 8000 },
+    { metadata: { provider_code: 'rate_limited', raw: privateText }, headers: {}, source: 'unknown' },
+    { metadata: {}, headers: { 'X-RateLimit-Limit-Requests': '1000', 'X-RateLimit-Remaining-Requests': '998' }, source: 'unknown' },
     { metadata: {}, headers: {}, source: 'unknown' },
   ];
   for (const item of cases) {
     await assert.rejects(recognizeCollectionText({ text: privateText, apiKey: 'key', fetchImpl: async () =>
       jsonResponse({ error: { code: 429, message: privateText, metadata: item.metadata } }, {
         status: 429, headers: { ...item.headers, 'Retry-After': '120' } }) }), (error) => {
-      assert.ok(error instanceof OpenRouterRateLimitError);
+      assert.ok(error instanceof GroqRateLimitError);
       assert.equal(error.retryAfterMs, 120_000);
       assert.equal(error.details.source, item.source);
       assert.equal(error.details.retryAfterProvided, true);
       assert.match(error.message, /120 с/);
       assert.equal(error.message.includes(privateText), false);
       assert.equal(JSON.stringify(error).includes(privateText), false);
-      if (item.source === 'platform') assert.match(error.message, /Осталось 0 из 20/);
+      if (item.source === 'platform') {
+        assert.equal(error.details.dimension, item.dimension);
+        assert.equal(error.details.limit, item.limit);
+        assert.match(error.message, /по лимиту организации/);
+      }
       return true;
     });
   }
@@ -71,7 +75,7 @@ test('HTTP 200 error bodies are handled as 429 and never accepted as a partial r
   await assert.rejects(recognizeCollectionText({ text: privateText, apiKey: 'key', fetchImpl: async () =>
     jsonResponse({ error: { code: 429, message: privateText, metadata: { provider_code: 'rate_limited' } },
       choices: [{ message: { content: JSON.stringify(result) } }] }, { headers: { 'Retry-After': '30' } }) }),
-    (error) => error instanceof OpenRouterRateLimitError && error.details.source === 'provider' && error.retryAfterMs === 30_000);
+    (error) => error instanceof GroqRateLimitError && error.details.source === 'unknown' && error.retryAfterMs === 30_000);
 });
 
 test('cooldown reports actual remaining wait and prevents premature upstream retries', async () => {
@@ -89,7 +93,7 @@ test('cooldown reports actual remaining wait and prevents premature upstream ret
   time += 5_000;
   await assert.rejects(ai.run({ route, text: privateText }), (error) => {
     assert.equal(error.retryAfterMs, 115_000);
-    assert.equal(error.details.source, 'provider');
+    assert.equal(error.details.source, 'unknown');
     assert.match(error.message, /115 с/);
     return true;
   });
@@ -132,7 +136,7 @@ test('background job displays safe 429 diagnostics for a two-row file', async (t
   assert.equal(failed.status, 'failed');
   assert.equal(failed.progress.sourceCount, 2);
   assert.equal(failed.progress.completed, 0);
-  assert.match(failed.error, /Часть 1: Поставщик модели.*120 с/);
+  assert.match(failed.error, /Часть 1: Groq.*120 с/);
   assert.equal(failed.error.includes(privateText), false);
   assert.throws(() => jobs.result('admin', job.id), /не готов/);
 });

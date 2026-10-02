@@ -10,7 +10,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Не удалось собрать Docker-образ.' }
 
     if (-not (Test-Path -LiteralPath $envPath)) {
-        $generated = @(docker run --rm $imageName node -e "const c=require('node:crypto'); for (const n of ['ADMIN_ACCESS_TOKEN','OPENROUTER_KEY_ENC_KEY']) console.log(n+'='+c.randomBytes(32).toString('hex'))")
+        $generated = @(docker run --rm $imageName node -e "const c=require('node:crypto'); for (const n of ['ADMIN_ACCESS_TOKEN','AI_KEY_ENC_KEY']) console.log(n+'='+c.randomBytes(32).toString('hex'))")
         if ($LASTEXITCODE -ne 0 -or $generated.Count -ne 2) { throw 'Не удалось создать настройки администратора.' }
         [System.IO.File]::WriteAllLines($envPath, [string[]]$generated, [System.Text.UTF8Encoding]::new($false))
         Write-Host 'Создан локальный файл .env с настройками админ-панели.'
@@ -18,8 +18,10 @@ try {
 
     $settings = @(Get-Content -LiteralPath $envPath -Encoding UTF8 | ForEach-Object { $_.TrimStart([char]0xFEFF) })
     $adminToken = @($settings | Where-Object { $_ -match '^ADMIN_ACCESS_TOKEN=[0-9a-f]{64}$' })
-    $encryptionKey = @($settings | Where-Object { $_ -match '^OPENROUTER_KEY_ENC_KEY=[0-9a-f]{64}$' })
-    if ($adminToken.Count -ne 1 -or $encryptionKey.Count -ne 1) {
+    $encryptionKey = @($settings | Where-Object { $_ -match '^(AI_KEY_ENC_KEY|OPENROUTER_KEY_ENC_KEY)=[0-9a-f]{64}$' })
+    $validEncryption = $encryptionKey.Count -eq 1 -or ($encryptionKey.Count -eq 2 -and
+        $encryptionKey[0].Split('=')[1] -eq $encryptionKey[1].Split('=')[1])
+    if ($adminToken.Count -ne 1 -or -not $validEncryption) {
         throw 'Файл .env неполный. Проверьте две строки по docs/SECOND_COMPUTER_SETUP.md.'
     }
 

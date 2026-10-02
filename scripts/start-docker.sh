@@ -11,14 +11,14 @@ if [ ! -e .env ]; then
   umask 077
   temporary_file=$(mktemp .env.XXXXXX)
   trap 'rm -f "$temporary_file"' EXIT
-  docker run --rm "$image" node -e "const c=require('node:crypto');for(const n of ['ADMIN_ACCESS_TOKEN','OPENROUTER_KEY_ENC_KEY'])console.log(n+'='+c.randomBytes(32).toString('hex'))" > "$temporary_file"
+  docker run --rm "$image" node -e "const c=require('node:crypto');for(const n of ['ADMIN_ACCESS_TOKEN','AI_KEY_ENC_KEY'])console.log(n+'='+c.randomBytes(32).toString('hex'))" > "$temporary_file"
   mv "$temporary_file" .env
   trap - EXIT
   printf 'Создан локальный файл .env с настройками админ-панели.\n'
 fi
 
 if ! grep -Eq '^ADMIN_ACCESS_TOKEN=[0-9a-f]{64}$' .env ||
-   ! grep -Eq '^OPENROUTER_KEY_ENC_KEY=[0-9a-f]{64}$' .env; then
+   ! grep -Eq '^(AI_KEY_ENC_KEY|OPENROUTER_KEY_ENC_KEY)=[0-9a-f]{64}$' .env; then
   printf 'Файл .env неполный. Проверьте обе строки по инструкции docs/SECOND_COMPUTER_SETUP.md.\n' >&2
   exit 1
 fi

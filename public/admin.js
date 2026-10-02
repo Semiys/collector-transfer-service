@@ -27,7 +27,7 @@ function renderFallbackConsent() {
   const fallback = fallbackAccounts();
   aiFallback.disabled = fallback.length === 0;
   aiFallbackLabel.textContent = fallback.length ?
-    `Разрешаю для этого запроса повторно отправить мой текст через OpenRouter с ключами владельцев: ${fallback.map((account) => `${account.owner} (${account.label})`).join(', ')}. Это произойдёт только при лимите основного ключа или приближении к нему по счётчику нашего сервиса.` :
+    `Разрешаю для этого запроса повторно отправить мой текст через Groq с ключами владельцев: ${fallback.map((account) => `${account.owner} (${account.label})`).join(', ')}. Это произойдёт только после ограничения частоты основного ключа. Ключи одной организации используют общие лимиты.` :
     'Нет доступных резервных ключей других владельцев. Добавьте их выше, если они согласны участвовать.';
 }
 
@@ -58,26 +58,26 @@ function accountRow(account) {
   const title = document.createElement('strong');
   title.textContent = `${account.label} — ${account.owner}`;
   const detail = document.createElement('p');
-  detail.textContent = `${account.keyPreview} · ${account.enabled ? 'Включён' : 'Выключен'} · добавлен ${new Date(account.createdAt).toLocaleDateString('ru-RU')}`;
+  detail.textContent = `${account.keyPreview} · ${account.compatible === false ? 'Старый ключ OpenRouter — добавьте ключ Groq' : account.enabled ? 'Включён' : 'Выключен'} · добавлен ${new Date(account.createdAt).toLocaleDateString('ru-RU')}`;
   const actions = document.createElement('div');
   actions.className = 'actions';
   const check = document.createElement('button');
   check.type = 'button'; check.className = 'secondary'; check.textContent = 'Проверить';
+  check.disabled = account.compatible === false;
   check.addEventListener('click', async () => {
     check.disabled = true;
     try {
       const result = await adminRequest('GET', `/accounts/${encodeURIComponent(account.id)}/check`);
-      const quota = result.freeRequestsToday;
-      const quotaText = quota ? ` Бесплатных запросов сегодня: использовано ${quota.used}, осталось ${quota.remaining} из ${quota.limit}. Суточный счётчик общий для аккаунта; у поставщика модели могут быть отдельные ограничения.` :
-        ' OpenRouter не сообщил остаток бесплатных запросов; по действительности ключа нельзя судить об остатке лимита.';
-      showStatus(result.valid ? `Ключ «${account.label}» принят OpenRouter${result.freeTier ? ' (бесплатный тариф)' : ''}.${quotaText}` :
-        `Ключ «${account.label}» отклонён OpenRouter.`, result.valid ? 'success' : 'error');
+      const usable = result.valid && result.modelAvailable;
+      showStatus(result.valid ? `Ключ «${account.label}» принят Groq. ${result.modelAvailable ? `Модель ${result.model} доступна в списке. Теперь проверьте распознавание 2–3 моделей; эта кнопка не проверяет генерацию, тариф и остаток лимита.` : `Модель ${result.model} отсутствует в списке. Проверьте Model Permissions в Groq Console.`}` :
+        `Ключ «${account.label}» отклонён Groq.`, usable ? 'success' : 'error');
     } catch (error) { showStatus(error.message, 'error'); }
     finally { check.disabled = false; }
   });
   const toggle = document.createElement('button');
   toggle.type = 'button'; toggle.className = 'secondary';
   toggle.textContent = account.enabled ? 'Выключить' : 'Включить';
+  toggle.disabled = account.compatible === false;
   toggle.addEventListener('click', async () => {
     toggle.disabled = true;
     try {
@@ -141,7 +141,7 @@ document.getElementById('ai-form').addEventListener('submit', async (event) => {
   recognizedCollection = null;
   aiReview.hidden = true;
   button.disabled = true;
-  aiStatus.textContent = 'Отправляю текст в OpenRouter…';
+  aiStatus.textContent = 'Отправляю текст в Groq…';
   aiStatus.className = '';
   try {
     const consentToAccountSwitch = aiFallback.checked;
@@ -180,7 +180,7 @@ document.getElementById('add-form').addEventListener('submit', async (event) => 
     });
     form.reset();
     await loadAccounts();
-    showStatus('Ключ сохранён. Его действительность ещё не проверена через OpenRouter.', 'success');
+    showStatus('Ключ сохранён. Его действительность ещё не проверена через Groq.', 'success');
   } catch (error) { showStatus(error.message, 'error'); }
   finally { button.disabled = false; }
 });

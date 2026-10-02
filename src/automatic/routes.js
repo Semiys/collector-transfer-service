@@ -2,23 +2,23 @@ import express from 'express';
 import { createHash } from 'node:crypto';
 import { CaptchaError } from '../http/captcha.js';
 import { concurrencyLimit, rateLimit } from '../http/limits.js';
-import { DEFAULT_OPENROUTER_MODEL } from '../ai/openrouter.js';
+import { DEFAULT_GROQ_MODEL } from '../ai/groq.js';
 
-export const PROCESSING_VERSION = '2026-10-02.2';
+export const PROCESSING_VERSION = '2026-10-02.3';
 
 export async function automaticDisclosure(store) {
   const accounts = store ? await store.list() : [];
   const owners = new Set();
   const route = accounts.filter((account) => {
     const owner = account.owner.trim().toLocaleLowerCase('ru');
-    if (!account.enabled || owners.has(owner)) return false;
+    if (!account.enabled || account.compatible === false || owners.has(owner)) return false;
     owners.add(owner);
     return true;
   }).slice(0, 3).map(({ id, owner }) => ({ id, owner }));
   return {
     route,
     owners: route.map(({ owner }) => owner),
-    revision: createHash('sha256').update(JSON.stringify({ route, model: DEFAULT_OPENROUTER_MODEL })).digest('hex'),
+    revision: createHash('sha256').update(JSON.stringify({ route, provider: 'groq', model: DEFAULT_GROQ_MODEL })).digest('hex'),
   };
 }
 

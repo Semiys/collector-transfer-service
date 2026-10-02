@@ -8,7 +8,7 @@ import { createAccountStore } from '../src/admin/account-store.js';
 import { createAdminRouter } from '../src/admin/routes.js';
 import { createAdminSession } from '../src/admin/session.js';
 
-const fakeKey = `sk-or-v1-${'a'.repeat(64)}`;
+const fakeKey = `gsk_${'a'.repeat(64)}`;
 
 test('admin storage encrypts API keys and does not return them in listings', async () => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), 'collector-accounts-'));
@@ -42,7 +42,7 @@ test('admin API requires a session and owner consent', async () => {
   app.use('/api/admin/session', auth.router);
   app.use('/api/admin', createAdminRouter({ store, auth, fetchImpl: async (_url, options) => {
     sentAuthorization = options.headers.Authorization;
-    return new Response(JSON.stringify({ data: { is_free_tier: true, expires_at: null } }), { status: 200 });
+    return new Response(JSON.stringify({ data: [{ id: 'openai/gpt-oss-20b', active: true }] }), { status: 200 });
   } }));
   const server = app.listen(0, '127.0.0.1');
   try {
@@ -68,7 +68,7 @@ test('admin API requires a session and owner consent', async () => {
     const listed = await (await fetch(base, { headers })).json();
     assert.equal(listed.accounts.length, 1);
     const checkResponse = await fetch(`${base}/${added.id}/check`, { headers });
-    assert.deepEqual(await checkResponse.json(), { valid: true, freeTier: true, expiresAt: null });
+    assert.deepEqual(await checkResponse.json(), { valid: true, model: 'openai/gpt-oss-20b', modelAvailable: true });
     assert.equal(sentAuthorization, `Bearer ${fakeKey}`);
     const logout = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/session`,
       { method: 'DELETE', headers });

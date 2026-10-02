@@ -1,5 +1,5 @@
-const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
-export const DEFAULT_OPENROUTER_MODEL = 'nvidia/nemotron-3-super-120b-a12b:free';
+const ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
+export const DEFAULT_GROQ_MODEL = 'openai/gpt-oss-20b';
 const STRING_FIELDS = ['name', 'brand', 'scale', 'category', 'price', 'purchaseDate', 'notes', 'photoUrl'];
 const MODEL_SCHEMA = {
   type: 'object', additionalProperties: false,
@@ -22,19 +22,19 @@ const EXTRACTION_INSTRUCTIONS = [
   'Не выдумывай отсутствующие поля: оставь пустую строку или пустой список tags. В warnings кратко укажи по-русски название или код записи и то, что требует проверки. Не добавляй предметов, которых нет во входе.',
 ].join('\n');
 
-export class OpenRouterRateLimitError extends Error {
-  constructor(retryAfterMs, { source = 'unknown', retryAfterProvided = false, limit, remaining } = {}) {
+export class GroqRateLimitError extends Error {
+  constructor(retryAfterMs, { source = 'unknown', retryAfterProvided = false, limit, remaining, dimension } = {}) {
     const origin = source === 'provider' ? 'Поставщик модели ограничил частоту запросов (HTTP 429).' :
-      source === 'platform' ? 'OpenRouter ограничил частоту запросов (HTTP 429): лимит сервиса.' :
-        'OpenRouter ограничил частоту запросов (HTTP 429). Источник ограничения не указан.';
+      source === 'platform' ? 'Groq ограничил частоту запросов (HTTP 429): лимит сервиса.' :
+        'Groq ограничил частоту запросов (HTTP 429). Источник ограничения не указан.';
     const counters = source === 'platform' && Number.isSafeInteger(limit) && Number.isSafeInteger(remaining) ?
-      ` Осталось ${remaining} из ${limit} запросов по сработавшему лимиту.` : '';
+      ` Осталось ${remaining} из ${limit} ${dimension === 'tokens' ? 'токенов в минуту' : 'запросов в сутки'} по лимиту организации.` : '';
     const seconds = Math.ceil(retryAfterMs / 1000);
     super(origin + counters + (retryAfterProvided ? ` Повторите не раньше чем через ${seconds} с.` :
       ` Срок ожидания не указан; повторная отправка приостановлена на ${seconds} с.`));
-    this.name = 'OpenRouterRateLimitError';
+    this.name = 'GroqRateLimitError';
     this.retryAfterMs = retryAfterMs;
-    this.details = { source, retryAfterProvided, limit, remaining };
+    this.details = { source, retryAfterProvided, limit, remaining, dimension };
   }
 }
 
@@ -50,34 +50,56 @@ function rateLimitError(upstream, payload) {
     const value = upstream.headers.get(name);
     return value && /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) ? Number(value) : undefined;
   };
-  const limit = numberHeader('x-ratelimit-limit');
-  const remaining = numberHeader('x-ratelimit-remaining');
-  const metadata = payload?.error?.metadata;
-  const providerReported = (typeof metadata?.provider_code === 'string' && metadata.provider_code.trim()) ||
-    (typeof metadata?.provider_name === 'string' && metadata.provider_name.trim());
-  const source = limit !== undefined || remaining !== undefined || upstream.headers.has('x-ratelimit-reset') ? 'platform' :
-    providerReported ? 'provider' : 'unknown';
+  const requests = { limit: numberHeader('x-ratelimit-limit-requests'), remaining: numberHeader('x-ratelimit-remaining-requests') };
+  const tokens = { limit: numberHeader('x-ratelimit-limit-tokens'), remaining: numberHeader('x-ratelimit-remaining-tokens') };
+  // Both counters may be present on any response. Attribute a limit only when a counter is exhausted.
+  const exhausted = requests.remaining === 0 ? { ...requests, dimension: 'requests' } :
+    tokens.remaining === 0 ? { ...tokens, dimension: 'tokens' } : {};
+  const { limit, remaining, dimension } = exhausted;
+  const source = dimension ? 'platform' : 'unknown';
   const delay = retryDelay(upstream.headers.get('retry-after'));
   // Keep only safe categories and counters, never raw upstream messages or collection data.
-  return new OpenRouterRateLimitError(delay.milliseconds, { source, retryAfterProvided: delay.provided, limit, remaining });
+  return new GroqRateLimitError(delay.milliseconds, { source, retryAfterProvided: delay.provided, limit, remaining, dimension });
+}
+
+class JsonResponseError extends Error {
+  constructor(kind, receivedBytes = 0) {
+    super(kind);
+    this.name = 'JsonResponseError';
+    this.kind = kind;
+    this.receivedBytes = receivedBytes;
+  }
 }
 
 export async function readJsonResponse(upstream, signal, maxBytes = 2 * 1024 * 1024) {
+  signal?.throwIfAborted();
   const reader = upstream.body?.getReader();
-  if (!reader) throw new Error('Empty body');
+  if (!reader) throw new JsonResponseError('empty');
   const parts = [];
   let length = 0;
+  const cancel = () => { void reader.cancel().catch(() => {}); };
+  signal?.addEventListener('abort', cancel, { once: true });
   try {
     while (true) {
       const { value, done } = await reader.read();
       signal?.throwIfAborted();
       if (done) break;
       length += value.byteLength;
-      if (length > maxBytes) { await reader.cancel(); throw new Error('Response too large'); }
+      if (length > maxBytes) { cancel(); throw new JsonResponseError('too_large', length); }
       parts.push(value);
     }
-  } finally { reader.releaseLock(); }
-  return JSON.parse(Buffer.concat(parts).toString('utf8'));
+  } catch (error) {
+    signal?.throwIfAborted();
+    if (error instanceof JsonResponseError || error?.name === 'TimeoutError') throw error;
+    throw new JsonResponseError('interrupted', length);
+  } finally {
+    signal?.removeEventListener('abort', cancel);
+    reader.releaseLock();
+  }
+  const body = Buffer.concat(parts).toString('utf8');
+  if (!body.trim()) throw new JsonResponseError('empty', length);
+  try { return JSON.parse(body); }
+  catch { throw new JsonResponseError('invalid_json', length); }
 }
 
 function normalizeResult(value, { allowEmpty = false } = {}) {
@@ -118,70 +140,93 @@ function normalizeResult(value, { allowEmpty = false } = {}) {
     }
     return model;
   });
-  return { transferSource: 'openrouter-ai-v1', models, warnings: value.warnings.map((item) => item.trim()) };
+  return { transferSource: 'groq-ai-v1', models, warnings: value.warnings.map((item) => item.trim()) };
 }
 
 async function requestJson({ text, apiKey, model, fetchImpl, signal, schema = SCHEMA, instructions = EXTRACTION_INSTRUCTIONS }) {
-  if (!apiKey) throw new Error('Ключ OpenRouter не выбран');
+  if (!apiKey) throw new Error('Ключ Groq не выбран');
   const requestBody = {
-    model, stream: false, max_tokens: 12000,
-    plugins: [{ id: 'response-healing' }],
-    provider: { require_parameters: true },
+    model, stream: false, max_completion_tokens: 4096,
+    reasoning_effort: 'low', include_reasoning: false,
     response_format: { type: 'json_schema', json_schema: { name: 'collection_transfer', strict: true, schema } },
     messages: [
       { role: 'system', content: instructions },
       { role: 'user', content: text.trim() },
     ],
   };
+  const requestSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000);
   let upstream;
   try {
     upstream = await fetchImpl(ENDPOINT, {
-      method: 'POST', redirect: 'error', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000),
+      method: 'POST', redirect: 'error', signal: requestSignal,
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify(requestBody),
     });
   } catch (error) {
     signal?.throwIfAborted();
-    throw new Error(error.name === 'TimeoutError' ? 'OpenRouter не ответил за 60 секунд' : 'Не удалось связаться с OpenRouter');
+    throw new Error(error?.name === 'TimeoutError' || requestSignal.reason?.name === 'TimeoutError' ?
+      'Groq не ответил за 60 секунд' : 'Не удалось связаться с Groq');
   }
-  if (upstream.status === 401 || upstream.status === 403) throw new Error('OpenRouter отклонил выбранный API-ключ');
+  if (upstream.status === 401 || upstream.status === 403) throw new Error('Groq отклонил выбранный API-ключ');
   if (upstream.status === 429) {
     let errorPayload;
-    try { errorPayload = await readJsonResponse(upstream, signal, 64 * 1024); }
+    try { errorPayload = await readJsonResponse(upstream, requestSignal, 64 * 1024); }
     catch { signal?.throwIfAborted(); }
     throw rateLimitError(upstream, errorPayload);
   }
-  if (!upstream.ok) throw new Error(`OpenRouter не обработал запрос: HTTP ${upstream.status}`);
+  if (upstream.status === 413) throw new Error('Groq отклонил слишком большую часть коллекции (HTTP 413). Попробуйте меньший файл или короткий текст.');
+  if (!upstream.ok) throw new Error(`Groq не обработал запрос: HTTP ${upstream.status}`);
   let payload;
   try {
-    payload = await readJsonResponse(upstream, signal);
+    payload = await readJsonResponse(upstream, requestSignal);
   }
-  catch { signal?.throwIfAborted(); throw new Error('OpenRouter вернул некорректный JSON ответа'); }
+  catch (error) {
+    signal?.throwIfAborted();
+    if (error?.name === 'TimeoutError' || requestSignal.reason?.name === 'TimeoutError') {
+      throw new Error('Groq не завершил ответ за 60 секунд. Ответ не получен целиком.');
+    }
+    const messages = {
+      empty: 'Groq вернул пустой HTTP-ответ',
+      too_large: 'HTTP-ответ Groq превышает лимит 2 МБ',
+      interrupted: 'Соединение с Groq оборвалось при чтении HTTP-ответа',
+      invalid_json: 'Groq вернул некорректный JSON в HTTP-ответе',
+    };
+    // Never include raw response contents, parser messages or network error details.
+    const diagnostic = error instanceof JsonResponseError ?
+      `${messages[error.kind]} (HTTP ${upstream.status}, получено ${error.receivedBytes} байт).` :
+      'Не удалось прочитать HTTP-ответ Groq.';
+    throw new Error(diagnostic);
+  }
   signal?.throwIfAborted();
-  if (payload?.error) {
-    if (payload.error.code === 429 || payload.error.metadata?.error_type === 'rate_limit_exceeded') {
-      throw rateLimitError(upstream, payload);
+  const choice = payload?.choices?.[0];
+  const reportedError = payload?.error ?? choice?.error;
+  if (reportedError) {
+    if (reportedError.code === 429 || reportedError.code === '429' || reportedError.metadata?.error_type === 'rate_limit_exceeded') {
+      throw rateLimitError(upstream, { error: reportedError });
     }
-    throw new Error('OpenRouter сообщил об ошибке во время обработки; результат не получен');
+    throw new Error('Groq сообщил об ошибке во время обработки; результат не получен');
   }
-  if (payload?.choices?.[0]?.finish_reason === 'length') {
-    throw new Error('Ответ ИИ оборвался из-за лимита длины. Разделите список на части по 10–20 моделей.');
+  if (choice?.finish_reason === 'error') {
+    throw new Error('Поставщик модели остановил обработку с ошибкой; результат не получен');
   }
-  const content = payload?.choices?.[0]?.message?.content;
-  if (typeof content !== 'string' || content.length > 1_000_000) throw new Error('OpenRouter не вернул текстовый результат');
+  if (choice?.finish_reason === 'length') {
+    throw new Error('Ответ ИИ оборвался из-за лимита длины. Разделите список на меньшие части; начните с 2–3 моделей.');
+  }
+  const content = choice?.message?.content;
+  if (typeof content !== 'string' || content.length > 1_000_000) throw new Error('Groq не вернул текстовый результат');
+  // Accept one complete Markdown wrapper, but never rebuild or accept truncated JSON.
+  const jsonText = content.trim();
+  const fence = /^```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n```$/i.exec(jsonText);
+  const modelUsed = typeof payload?.model === 'string' && /^[a-zA-Z0-9._/:-]{1,200}$/.test(payload.model) ? payload.model : model;
   let result;
-  try { result = JSON.parse(content); }
+  try { result = JSON.parse(fence ? fence[1] : jsonText); }
   catch {
-    const finishReason = payload?.choices?.[0]?.finish_reason;
-    if (finishReason === 'length') {
-      throw new Error('Ответ ИИ оборвался из-за лимита длины. Разделите список на части по 10–20 моделей.');
-    }
-    throw new Error(`ИИ вернул результат не в формате JSON (модель: ${payload?.model || model}). Попробуйте список из 10–20 моделей.`);
+    throw new Error(`ИИ вернул результат не в формате JSON (модель: ${modelUsed}). Ответ HTTP прочитан полностью; содержимое результата отклонено.`);
   }
-  return { value: result, modelUsed: typeof payload?.model === 'string' ? payload.model.slice(0, 200) : model };
+  return { value: result, modelUsed };
 }
 
-export async function recognizeCollectionText({ text, apiKey, model = DEFAULT_OPENROUTER_MODEL, fetchImpl = fetch, signal }) {
+export async function recognizeCollectionText({ text, apiKey, model = DEFAULT_GROQ_MODEL, fetchImpl = fetch, signal }) {
   if (typeof text !== 'string' || text.trim().length < 10 || text.length > 20_000) {
     throw new Error('Вставьте от 10 до 20 000 символов текста коллекции');
   }
@@ -204,7 +249,7 @@ const RECORD_SCHEMA = {
 };
 
 export async function recognizeCollectionRecords({ records, context = '', apiKey,
-  model = DEFAULT_OPENROUTER_MODEL, fetchImpl = fetch, signal }) {
+  model = DEFAULT_GROQ_MODEL, fetchImpl = fetch, signal }) {
   if (!Array.isArray(records) || records.length === 0 || records.length > 15 ||
     records.some((item) => !Number.isInteger(item.id) || typeof item.text !== 'string')) {
     throw new Error('Некорректная часть исходного списка');

@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { setImmediate as nextTurn } from 'node:timers/promises';
 import { createJobStore, JobError } from '../src/jobs/store.js';
 import { prepareSource, createRecognitionWorker } from '../src/jobs/recognize.js';
-import { recognizeCollectionRecords } from '../src/ai/openrouter.js';
+import { recognizeCollectionRecords } from '../src/ai/groq.js';
 import { createAiService } from '../src/ai/service.js';
 import { parseInput } from '../src/transfer/parse-input.js';
 import { buildArchive } from '../src/transfer/build-archive.js';
@@ -115,7 +115,7 @@ test('chunked recognition preserves duplicates, section context, coverage and EU
   const calls = [];
   const ai = createAiService({ store: { getEnabledAccounts: async () => [primary] }, fetchImpl: async (_url, options) => {
     const body = JSON.parse(options.body), input = JSON.parse(body.messages[1].content); calls.push(input);
-    assert.equal(body.model, 'nvidia/nemotron-3-super-120b-a12b:free');
+    assert.equal(body.model, 'openai/gpt-oss-20b');
     assert.equal(body.response_format.type, 'json_schema');
     assert.equal(body.response_format.json_schema.strict, true);
     return upstream({ models: input.records.filter((item) => item.id !== 1).map((item) => model(item.id, 'Same car')),

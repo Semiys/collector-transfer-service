@@ -22,7 +22,7 @@
     get('job-consent').checked = false; fallback.checked = false;
     const others = reserves(); fallback.disabled = !others.length;
     get('job-fallback-label').textContent = others.length ?
-      `Разрешаю для всех частей этого задания повторную отправку через OpenRouter с ключами: ${others.map((item) => `${item.owner} (${item.label})`).join(', ')}. Переключение возможно при лимите основного ключа или приближении к нему по счётчику сервиса.` :
+      `Разрешаю для всех частей этого задания повторную отправку через Groq с ключами: ${others.map((item) => `${item.owner} (${item.label})`).join(', ')}. Переключение возможно только после ограничения частоты основного ключа. Ключи одной организации используют общие лимиты.` :
       'Нет резервных ключей других владельцев. Используется только выбранный основной ключ.';
   }
   document.addEventListener('collector-accounts', (event) => {

@@ -29,7 +29,7 @@ function parseJson(bytes) {
   }
   const objects = Array.isArray(source) ? source : source?.models;
   const parsed = rowsFromObjects(objects);
-  if (source?.transferSource === 'openrouter-ai-v1' || source?.transferSource === 'manual-ai-v1') {
+  if (['groq-ai-v1', 'openrouter-ai-v1', 'manual-ai-v1'].includes(source?.transferSource)) {
     const warnings = Array.isArray(source.warnings) ? source.warnings : [];
     if (warnings.length > 200 || warnings.some((item) => typeof item !== 'string' || item.length > 500)) {
       throw new Error('Некорректные замечания к результату ИИ');

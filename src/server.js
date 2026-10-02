@@ -44,8 +44,11 @@ export function createApp({ captcha, env = process.env, accountStore: suppliedSt
   const themeScriptPath = path.resolve(currentDirectory, '../public/theme.js');
   const fontsPath = path.resolve(currentDirectory, '../public/fonts');
   const dataDir = env.DATA_DIR ?? path.resolve(currentDirectory, '../data');
-  const accountStore = suppliedStore ?? (env.OPENROUTER_KEY_ENC_KEY ?
-    createAccountStore({ dataDir, encryptionKey: env.OPENROUTER_KEY_ENC_KEY }) : null);
+  if (env.AI_KEY_ENC_KEY && env.OPENROUTER_KEY_ENC_KEY && env.AI_KEY_ENC_KEY !== env.OPENROUTER_KEY_ENC_KEY) {
+    throw new Error('AI_KEY_ENC_KEY и старый OPENROUTER_KEY_ENC_KEY должны совпадать. Сохраните прежний ключ шифрования.');
+  }
+  const encryptionKey = env.AI_KEY_ENC_KEY ?? env.OPENROUTER_KEY_ENC_KEY;
+  const accountStore = suppliedStore ?? (encryptionKey ? createAccountStore({ dataDir, encryptionKey }) : null);
   const adminAuth = createAdminSession({ adminCode: env.ADMIN_ACCESS_TOKEN,
     secureCookie: env.COOKIE_SECURE === 'true' });
   const aiService = createAiService({ store: accountStore, fetchImpl: aiFetchImpl });
