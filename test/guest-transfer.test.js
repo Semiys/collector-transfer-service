@@ -175,10 +175,11 @@ test('availability is fail closed and payment creation remains disabled', async 
   }
 });
 
-test('guest conditions expose owners and revision but never keys, account IDs or labels', async (t) => {
+test('guest conditions expose readiness and revision without owners, keys, account IDs or labels', async (t) => {
   const f = await fixture(t); await f.pay();
   const response = await f.post('conditions'); assert.equal(response.status, 200);
-  const conditions = await response.json(); assert.deepEqual(conditions.owners, ['Owner', 'Friend']);
+  const conditions = await response.json(); assert.equal(conditions.fallbackAvailable, true); assert.equal(conditions.aiConfigured, true);
+  assert.ok(!Object.hasOwn(conditions, 'owners')); assert.ok(!JSON.stringify(conditions).includes('Owner')); assert.ok(!JSON.stringify(conditions).includes('Friend'));
   assert.match(conditions.routeRevision, /^[0-9a-f]{64}$/); assert.ok(!JSON.stringify(conditions).includes('PRIVATE'));
   assert.equal(response.headers.get('cache-control'), 'no-store'); assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
   assert.equal(response.headers.get('set-cookie'), null); assert.equal(response.headers.get('access-control-allow-origin'), null);

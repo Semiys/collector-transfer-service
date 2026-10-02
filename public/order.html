@@ -9,14 +9,15 @@
   <script src="/theme.js"></script>
   <script src="/captcha.js"></script>
   <script src="/order.js" type="module"></script>
+  <link rel="icon" type="image/png" href="/collector-logo.png">
   <link rel="stylesheet" href="/theme.css">
 </head>
 <body>
   <main class="order-layout">
     <header class="site-header">
-      <a class="site-brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span>Хаб Коллекционера<small>Перенос коллекций</small></span></a>
+      <a class="site-brand" href="/"><img class="brand-mark" src="/collector-logo.png" alt="" width="32" height="32"><span>Хаб Коллекционера<small>Перенос коллекций</small></span></a>
       <div class="site-actions"><button class="theme-toggle" type="button" data-theme-toggle>Тема</button><a class="header-link" href="/admin">Вход</a></div>
-      <nav class="site-nav" aria-label="Разделы сайта"><a href="/#free-transfer">Перенос коллекции</a><a href="/automatic">Автоматически</a><a href="/order" aria-current="page">Мой заказ</a></nav>
+      <nav class="site-nav" aria-label="Разделы сайта"><a href="/#free-transfer">Перенос коллекции</a><a href="/automatic">Автоматически</a><a href="/processing">Обработка данных</a></nav>
     </header>
 
     <section class="hero">
@@ -77,7 +78,6 @@
           <label class="checkbox"><input id="order-ai-consent" type="checkbox"> Я согласен на передачу данных коллекции внешней нейросети.</label>
           <label class="checkbox"><input id="order-processing-consent" type="checkbox"><span>Я ознакомился с <a href="/processing" target="_blank" rel="noopener">условиями обработки данных</a>.</span></label>
           <label id="order-switch-label" class="checkbox" hidden><input id="order-switch-consent" type="checkbox"><span id="order-switch-text"></span></label>
-          <details><summary>Подробнее об участниках обработки</summary><p id="order-owners"></p><p><a href="/processing#ai-details" target="_blank" rel="noopener">Сведения о внешних сервисах</a></p></details>
           <button id="order-conditions-retry" type="button" class="secondary">Обновить условия</button>
         </fieldset>
         <div id="order-captcha"></div><p id="order-captcha-status" class="note" role="status"></p>
@@ -128,7 +128,7 @@
       </section>
     </section>
 
-    <footer class="site-footer"><span>Хаб Коллекционера</span><div class="actions"><a class="action secondary" href="/automatic">← К автоматическому переносу</a><a class="action secondary" href="/processing">Обработка данных</a></div></footer>
+    <footer class="site-footer"><span>Хаб Коллекционера</span><a class="action secondary" href="/automatic">← К автоматическому переносу</a></footer>
   </main>
   <dialog id="order-editor" class="model-editor" aria-labelledby="order-editor-title">
     <div class="editor-header"><h2 id="order-editor-title">Модель</h2><button id="order-editor-close" type="button" class="secondary">Закрыть</button></div>

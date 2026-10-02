@@ -25,15 +25,12 @@
       config = data;
       document.getElementById('automatic-availability').textContent = data.aiConfigured ?
         'Перед скачиванием вы проверите и подтвердите найденные модели.' : 'Автоматическое распознавание пока недоступно.';
-      document.getElementById('automatic-owners').textContent = data.owners.length ?
-        `Основной участник обработки: ${data.owners[0]}.` : 'Сведения об участниках обработки появятся перед запуском распознавания.';
-      document.getElementById('automatic-switch-label').hidden = data.owners.length < 2;
-      document.getElementById('automatic-switch-text').textContent = data.owners.length < 2 ? '' :
-        `При временной недоступности распознавания разрешаю повторную отправку данных через участников сервиса: ${data.owners.slice(1).join(', ')}.`;
+      document.getElementById('automatic-switch-label').hidden = !data.fallbackAvailable;
+      document.getElementById('automatic-switch-text').textContent = !data.fallbackAvailable ? '' :
+        'При временной недоступности распознавания разрешаю повторную передачу коллекции внешней нейросети через другого участника сервиса. Это согласие необязательно.';
       update();
     } catch (error) {
       document.getElementById('automatic-availability').textContent = 'Не удалось проверить доступность распознавания. Попробуйте позже.';
-      document.getElementById('automatic-owners').textContent = 'Не удалось загрузить сведения об обработке. Попробуйте позже.';
       document.getElementById('automatic-switch-label').hidden = true;
     }
   }

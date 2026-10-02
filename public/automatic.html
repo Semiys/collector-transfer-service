@@ -8,13 +8,14 @@
   <script src="/theme.js"></script>
   <script src="/captcha.js"></script>
   <script src="/automatic.js" defer></script>
+  <link rel="icon" type="image/png" href="/collector-logo.png">
   <link rel="stylesheet" href="/theme.css">
   <link rel="stylesheet" href="/automatic.css">
 </head>
 <body>
   <main class="automatic-layout">
     <header class="site-header">
-      <a class="site-brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span>Хаб Коллекционера<small>Перенос коллекций</small></span></a>
+      <a class="site-brand" href="/"><img class="brand-mark" src="/collector-logo.png" alt="" width="32" height="32"><span>Хаб Коллекционера<small>Перенос коллекций</small></span></a>
       <div class="site-actions">
         <button class="theme-toggle" type="button" data-theme-toggle>Тема</button>
         <a class="header-link" href="/admin">Вход</a>
@@ -28,7 +29,7 @@
         <h1 id="automatic-title">Из списка моделей — в коллекцию DomCollection</h1>
         <p>Загрузите таблицу или вставьте текст. Сервис поможет разобрать записи, а перед скачиванием вы проверите каждую модель.</p>
         <div class="automatic-hero-actions">
-          <a class="action secondary" href="/#free-transfer">Перенести бесплатно сейчас</a>
+          <a class="action secondary" href="/guide">Перенести бесплатно сейчас</a>
           <a class="action secondary" href="/order">Проверить заказ</a>
           <span class="automatic-coming">Автоматический перенос пока разрабатывается</span>
         </div>
@@ -109,11 +110,6 @@
         <label class="automatic-checkbox"><input id="automatic-ai-consent" type="checkbox"> Я согласен на передачу данных коллекции внешней нейросети для распознавания.</label>
         <label class="automatic-checkbox"><input id="automatic-processing-consent" type="checkbox"><span>Я ознакомился с <a href="/processing" target="_blank" rel="noopener">условиями обработки данных</a>.</span></label>
         <label id="automatic-switch-label" class="automatic-checkbox" hidden><input id="automatic-switch-consent" type="checkbox"><span id="automatic-switch-text"></span></label>
-        <details>
-          <summary>Подробнее о передаче данных</summary>
-          <p id="automatic-owners">Загружаю сведения об обработке…</p>
-          <p>Данные передаются внешней нейросети только с вашего согласия. <a href="/processing#ai-details" target="_blank" rel="noopener">Сведения о сервисах обработки</a>.</p>
-        </details>
         <div id="automatic-captcha"></div>
         <p id="automatic-captcha-status" class="automatic-help" role="status"></p>
         <button id="automatic-captcha-retry" class="secondary" type="button">Повторить проверку</button>

@@ -62,7 +62,7 @@ export function createGuestTransferRouter({ orders, processing, delivery, store,
       body(request, []);
       const route = await automaticDisclosure(store);
       response.json({ policyVersion: PROCESSING_VERSION, routeRevision: route.revision,
-        owners: route.owners, aiConfigured: route.owners.length > 0 });
+        fallbackAvailable: route.route.length > 1, aiConfigured: route.owners.length > 0 });
     } catch (error) { next(error); }
   });
   router.post('/state', stateLimit, reads, authenticate, json, async (request, response, next) => {

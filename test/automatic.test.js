@@ -22,8 +22,8 @@ test('automatic consent check rejects missing, stale or changed consent before C
     const configText = await configResponse.text();
     const config = JSON.parse(configText);
     assert.equal(configResponse.headers.get('cache-control'), 'no-store');
-    assert.deepEqual(config.owners, ['Owner 1', 'Owner 2']);
-    assert.ok(!configText.includes('secret-one') && !configText.includes('duplicate-owner'));
+    assert.equal(config.fallbackAvailable, true); assert.equal(config.aiConfigured, true);
+    for (const privateValue of ['owners', 'Owner 1', 'Owner 2', 'secret-one', 'duplicate-owner']) assert.ok(!configText.includes(privateValue));
     const valid = { policyVersion: config.policyVersion, routeRevision: config.routeRevision,
       consentToAI: true, acceptProcessing: true, consentToAccountSwitch: false, captchaToken: 'token' };
     const send = (body) => fetch(`${base}/check`, { method: 'POST',

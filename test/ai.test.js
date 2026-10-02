@@ -30,12 +30,12 @@ test('AI result reaches the existing reviewed JSON to ZIP path', async () => {
   assert.equal(sent.url, 'https://openrouter.ai/api/v1/chat/completions');
   assert.equal(sent.options.headers.Authorization, `Bearer ${apiKey}`);
   const body = JSON.parse(sent.options.body);
-  assert.equal(body.model, 'qwen/qwen3.8-27b:free');
+  assert.equal(body.model, 'nvidia/nemotron-3-super-120b-a12b:free');
   assert.deepEqual(body.plugins, [{ id: 'response-healing' }]);
   assert.equal(body.response_format.type, 'json_schema');
   assert.equal(body.provider.require_parameters, true);
   assert.equal(result.transferSource, 'openrouter-ai-v1');
-  assert.equal(result.modelUsed, 'qwen/qwen3.8-27b:free');
+  assert.equal(result.modelUsed, 'nvidia/nemotron-3-super-120b-a12b:free');
   const parsed = await parseInput('recognized.json', Buffer.from(JSON.stringify(result)));
   assert.equal(parsed.type, 'ai-json');
   assert.equal(parsed.warnings.length, 2);
@@ -66,7 +66,7 @@ test('AI rejects a rate limit and malformed model data', async () => {
 
 test('AI explains a truncated response instead of a generic JSON error', async () => {
   await assert.rejects(recognizeCollectionText({ text: 'Список моделей коллекционера из нескольких сообщений', apiKey,
-    fetchImpl: async () => new Response(JSON.stringify({ model: 'qwen/qwen3.8-27b:free',
+    fetchImpl: async () => new Response(JSON.stringify({ model: 'nvidia/nemotron-3-super-120b-a12b:free',
       choices: [{ finish_reason: 'length', message: { content: '{"models":[' } }] }), { status: 200 }) }),
   /Ответ ИИ оборвался/);
 });

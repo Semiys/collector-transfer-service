@@ -90,7 +90,7 @@ export function createOrderTransfer({ onOrderChange, onAccessUnavailable }) {
     generation += 1; clearTimeout(timer); controller.abort(); controller = new AbortController();
     accessCode = ''; order = null; job = null; conditions = null; busy = false; refreshing = false; loadingConditions = false;
     file.value = ''; text.value = ''; root.hidden = true; get('order-job').hidden = true;
-    get('order-owners').textContent = ''; get('order-switch-text').textContent = ''; get('order-switch-label').hidden = true;
+    get('order-switch-text').textContent = ''; get('order-switch-label').hidden = true;
     for (const id of ['order-job-title', 'order-job-detail', 'order-job-expiry']) get(id).textContent = '';
     clearConsents(); clearPreview(); message('');
   }
@@ -109,16 +109,15 @@ export function createOrderTransfer({ onOrderChange, onAccessUnavailable }) {
     if (loadingConditions) return;
     const current = generation;
     loadingConditions = true;
-    conditions = null; clearConsents(); get('order-owners').textContent = 'Загружаю условия…';
+    conditions = null; clearConsents();
     try {
       const data = await request('conditions');
       if (current !== generation) return;
       conditions = data;
-      get('order-owners').textContent = data.owners.length ? `Основной участник обработки: ${data.owners[0]}.` : 'Распознавание временно недоступно.';
-      get('order-switch-label').hidden = data.owners.length < 2;
-      get('order-switch-text').textContent = data.owners.length < 2 ? '' :
-        `При временной недоступности разрешаю повторную отправку данных через участников сервиса: ${data.owners.slice(1).join(', ')}.`;
-    } catch (error) { if (current === generation) { get('order-owners').textContent = 'Условия недоступны. Попробуйте обновить их позже.'; message(error.message, true); } }
+      get('order-switch-label').hidden = !data.fallbackAvailable;
+      get('order-switch-text').textContent = !data.fallbackAvailable ? '' :
+        'При временной недоступности распознавания разрешаю повторную передачу коллекции внешней нейросети через другого участника сервиса. Это согласие необязательно.';
+    } catch (error) { if (current === generation) message('Условия недоступны. Попробуйте обновить их позже.', true); }
     finally { if (current === generation) { loadingConditions = false; controls(); } }
   }
   function renderJob() {

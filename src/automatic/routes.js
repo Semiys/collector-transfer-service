@@ -2,8 +2,9 @@ import express from 'express';
 import { createHash } from 'node:crypto';
 import { CaptchaError } from '../http/captcha.js';
 import { concurrencyLimit, rateLimit } from '../http/limits.js';
+import { DEFAULT_OPENROUTER_MODEL } from '../ai/openrouter.js';
 
-export const PROCESSING_VERSION = '2026-10-01';
+export const PROCESSING_VERSION = '2026-10-02.2';
 
 export async function automaticDisclosure(store) {
   const accounts = store ? await store.list() : [];
@@ -17,7 +18,7 @@ export async function automaticDisclosure(store) {
   return {
     route,
     owners: route.map(({ owner }) => owner),
-    revision: createHash('sha256').update(JSON.stringify(route)).digest('hex'),
+    revision: createHash('sha256').update(JSON.stringify({ route, model: DEFAULT_OPENROUTER_MODEL })).digest('hex'),
   };
 }
 
@@ -27,7 +28,7 @@ export function createAutomaticRouter({ captcha, store }) {
   router.get('/config', async (_request, response) => {
     try {
       const route = await automaticDisclosure(store);
-      response.json({ policyVersion: PROCESSING_VERSION, owners: route.owners,
+      response.json({ policyVersion: PROCESSING_VERSION, fallbackAvailable: route.route.length > 1,
         routeRevision: route.revision, aiConfigured: route.owners.length > 0,
         processingAvailable: false, paymentAvailable: false });
     } catch {
@@ -52,13 +53,13 @@ export function createAutomaticRouter({ captcha, store }) {
           throw new CaptchaError('Подтвердите условия обработки и отправку данных внешнему ИИ.', 400);
         }
         const route = await automaticDisclosure(store);
-        if (!route.owners.length) throw new CaptchaError('Ключи ИИ ещё не настроены администратором.', 503);
+        if (!route.owners.length) throw new CaptchaError('Распознавание временно недоступно.', 503);
         if (body.routeRevision !== route.revision) {
-          throw new CaptchaError('Список владельцев ключей изменился. Обновите страницу и подтвердите условия снова.', 409);
+          throw new CaptchaError('Условия обработки изменились. Обновите страницу и подтвердите их снова.', 409);
         }
         if (typeof body.consentToAccountSwitch !== 'boolean' ||
           (body.consentToAccountSwitch && route.owners.length < 2)) {
-          throw new CaptchaError('Проверьте согласие на использование резервных ключей.', 400);
+          throw new CaptchaError('Проверьте согласие на повторную передачу данных.', 400);
         }
         await captcha.verify({ token: body.captchaToken, action: 'collection_prepare',
           hostname: request.hostname, ip: request.ip });

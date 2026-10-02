@@ -1,4 +1,5 @@
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
+export const DEFAULT_OPENROUTER_MODEL = 'nvidia/nemotron-3-super-120b-a12b:free';
 const STRING_FIELDS = ['name', 'brand', 'scale', 'category', 'price', 'purchaseDate', 'notes', 'photoUrl'];
 const MODEL_SCHEMA = {
   type: 'object', additionalProperties: false,
@@ -180,7 +181,7 @@ async function requestJson({ text, apiKey, model, fetchImpl, signal, schema = SC
   return { value: result, modelUsed: typeof payload?.model === 'string' ? payload.model.slice(0, 200) : model };
 }
 
-export async function recognizeCollectionText({ text, apiKey, model = 'qwen/qwen3.8-27b:free', fetchImpl = fetch, signal }) {
+export async function recognizeCollectionText({ text, apiKey, model = DEFAULT_OPENROUTER_MODEL, fetchImpl = fetch, signal }) {
   if (typeof text !== 'string' || text.trim().length < 10 || text.length > 20_000) {
     throw new Error('Вставьте от 10 до 20 000 символов текста коллекции');
   }
@@ -203,7 +204,7 @@ const RECORD_SCHEMA = {
 };
 
 export async function recognizeCollectionRecords({ records, context = '', apiKey,
-  model = 'qwen/qwen3.8-27b:free', fetchImpl = fetch, signal }) {
+  model = DEFAULT_OPENROUTER_MODEL, fetchImpl = fetch, signal }) {
   if (!Array.isArray(records) || records.length === 0 || records.length > 15 ||
     records.some((item) => !Number.isInteger(item.id) || typeof item.text !== 'string')) {
     throw new Error('Некорректная часть исходного списка');
