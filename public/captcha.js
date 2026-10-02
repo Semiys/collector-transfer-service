@@ -20,20 +20,20 @@
         if (error) { script?.remove(); reject(error); }
         else resolve(window.turnstile);
       };
-      // A loaded api.js is not necessarily a ready widget. Bound both phases,
-      // including retries when the global API already exists but is not ready.
+      // An async api.js rejects turnstile.ready(). Use Cloudflare's explicit
+      // onload callback and retain a deadline if that callback never arrives.
       const timeout = setTimeout(() => finish(new Error('Проверка человека не загрузилась. Проверьте интернет и повторите.')), 15000);
-      const ready = () => {
-        try {
-          if (!window.turnstile?.ready) throw new Error('Проверка человека не загрузилась.');
-          window.turnstile.ready(() => finish());
-        } catch { finish(new Error('Проверка человека не загрузилась. Повторите проверку.')); }
+      const loaded = () => {
+        if (typeof window.turnstile?.render !== 'function') {
+          finish(new Error('Проверка человека не загрузилась. Повторите проверку.')); return;
+        }
+        finish();
       };
-      if (window.turnstile) { ready(); return; }
+      if (typeof window.turnstile?.render === 'function') { loaded(); return; }
+      window.collectorTurnstileLoaded = loaded;
       script = document.createElement('script');
-      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=collectorTurnstileLoaded';
       script.async = true;
-      script.onload = ready;
       script.onerror = () => finish(new Error('Проверка человека недоступна. Проверьте интернет и повторите.'));
       document.head.append(script);
     }).catch((error) => { scriptPromise = null; throw error; });
