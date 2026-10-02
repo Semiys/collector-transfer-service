@@ -19,11 +19,14 @@ function fields(input, allowed) {
   }
 }
 function optionsOf(value) {
-  fields(value, ['priceCurrency', 'defaultCategory', 'defaultScale', 'transferDate', 'acceptTextWarnings', 'expectedRateDate']);
+  fields(value, ['priceCurrency', 'defaultCategory', 'defaultScale', 'defaultBrand', 'transferDate', 'acceptTextWarnings', 'expectedRateDate']);
   if (!['RUB', 'EUR'].includes(value.priceCurrency)) throw new DeliveryError('Выберите валюту цены: RUB или EUR.');
   if (value.acceptTextWarnings !== true) throw new DeliveryError('Подтвердите проверку замечаний распознавания.');
   for (const key of ['defaultCategory', 'defaultScale', 'transferDate', 'expectedRateDate']) {
     if (value[key] != null && (typeof value[key] !== 'string' || value[key].length > 100)) throw new DeliveryError('Проверьте параметры переноса.');
+  }
+  if (value.defaultBrand != null && (typeof value.defaultBrand !== 'string' || value.defaultBrand.length > 200)) {
+    throw new DeliveryError('Проверьте бренд для пустых полей: не больше 200 символов.');
   }
   const options = { ...value, transferDate: value.transferDate?.trim() || new Date().toISOString().slice(0, 10) };
   if (!validDate(options.transferDate)) throw new DeliveryError('Некорректная дата переноса.');
@@ -73,7 +76,7 @@ export function createOrderDelivery({ orders, jobs, capacity = createArchiveCapa
       const { parsed, mapping } = await prepared(result);
       connectionSignal.throwIfAborted();
       try {
-        const rows = reviewRows(parsed, mapping, edits);
+        const rows = reviewRows(parsed, mapping, edits, { defaultBrand: options.defaultBrand });
         for (const row of rows) {
           const errors = Object.values(rowProblems(row));
           if (errors.length) throw new Error(`Модель ${row.sourceRow}: ${errors.join(' ')}`);

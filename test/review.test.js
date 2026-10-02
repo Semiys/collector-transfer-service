@@ -10,6 +10,23 @@ import { CaptchaError } from '../src/http/captcha.js';
 
 const options = { priceCurrency: 'RUB', transferDate: '2026-10-01' };
 
+test('default manufacturer agrees in preview and ZIP, preserving explicit and corrected brands', async () => {
+  const parsed = await parseInput('example.json', Buffer.from(JSON.stringify([
+    { name: 'Invented car', brand: '' }, { name: 'Invented figure', brand: 'Other Maker' },
+    { name: 'Invented third item', brand: '' },
+  ])));
+  const original = structuredClone(parsed), mapping = suggestMapping(parsed.headers);
+  const defaults = { defaultBrand: 'Example Maker' }, edits = [{ rowIndex: 2, values: { brand: '' } }];
+  const preview = reviewRows(parsed, mapping, edits, defaults);
+  const result = await buildArchive({ parsed, mapping, edits, options: { ...options, ...defaults } });
+  assert.deepEqual(preview.map((row) => row.brand), ['Example Maker', 'Other Maker', '']);
+  assert.deepEqual(result.document.models.map((row) => row.brand), ['Example Maker', 'Other Maker', null]);
+  assert.match(result.document.models[0].notes, /Производитель указан пользователем/);
+  assert.match(result.document.models[0].notes, /Дата покупки отсутствовала/);
+  assert.deepEqual(parsed, original);
+  assert.throws(() => reviewRows(parsed, mapping, [], { defaultBrand: 'x'.repeat(201) }), /200/);
+});
+
 test('corrections bind to one of two identical models and preserve ZIP links and the original source', async () => {
   const source = [1, 2].map(() => ({ name: 'Одинаковая модель', brand: 'Hot Wheels', scale: '1:64',
     category: 'Автомобили', tags: ['Год выпуска: 1969'], price: '550', purchaseDate: '', notes: '',

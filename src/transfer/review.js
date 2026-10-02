@@ -36,7 +36,10 @@ export function parseTags(value) {
 
 // The index binds corrections to an input record, including identical models.
 // Neither exported IDs nor source-line numbers can be changed by a correction.
-export function reviewRows(parsed, mapping, edits = []) {
+export function reviewRows(parsed, mapping, edits = [], { defaultBrand = '' } = {}) {
+  if (typeof defaultBrand !== 'string' || defaultBrand.length > FIELD_LIMITS.brand) {
+    throw new Error('Бренд для пустых полей должен содержать не больше 200 символов.');
+  }
   if (!mapping || typeof mapping !== 'object' || Array.isArray(mapping) ||
       Object.entries(mapping).some(([field, header]) => !TARGET_FIELDS.includes(field) ||
         typeof header !== 'string' || (header && !parsed.headers.includes(header)))) {
@@ -47,6 +50,12 @@ export function reviewRows(parsed, mapping, edits = []) {
     throw new Error('Слишком много исправлений: не больше 300 моделей и 512 КБ текста.');
   }
   const rows = mapRows(parsed.rows, mapping);
+  defaultBrand = defaultBrand.trim();
+  if (defaultBrand) for (const row of rows) {
+    if (row.brand) continue;
+    row.brand = defaultBrand;
+    row.notes = `${row.notes}\nПроизводитель указан пользователем для записей без бренда: ${defaultBrand}.`.trim();
+  }
   const seen = new Set();
   for (const edit of edits) {
     if (!edit || typeof edit !== 'object' || Array.isArray(edit) ||

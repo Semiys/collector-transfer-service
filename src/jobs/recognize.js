@@ -16,7 +16,19 @@ export async function prepareSource({ filename, bytes }) {
     let parsed;
     try { parsed = await parseInput(filename, bytes); }
     catch { throw new JobError('Не удалось прочитать таблицу. Поддерживаются CSV, XLSX и JSON со списком объектов.'); }
-    records = parsed.rows.map((row, index) => ({ id: index + 1, text: JSON.stringify(row) }));
+    const sections = new Map((parsed.sections ?? []).map(({ rowIndex, label }) => [rowIndex, label]));
+    let sectionContext = '';
+    records = parsed.rows.map((row, index) => {
+      const values = Object.values(row).map((value) => value.trim());
+      // Also recognize a flattened full-width heading in CSV/JSON. Sparse or
+      // merely similar rows remain for the AI and the user's review.
+      const repeatedHeading = values.length >= 3 && values.every((value) => value === values[0]) &&
+        /\p{L}/u.test(values[0]) ? values[0] : '';
+      const sectionLabel = sections.get(index) || repeatedHeading;
+      if (sectionLabel) sectionContext = sectionLabel;
+      return { id: index + 1, text: JSON.stringify(row),
+        ...(sectionLabel ? { sectionLabel } : sectionContext ? { sectionContext } : {}) };
+    });
     sourceFormat = 'table';
   }
   if (!records.length || records.length > 300) throw new JobError('Нужно от 1 до 300 непустых строк. Разделите источник на части.');
@@ -49,10 +61,14 @@ export function createRecognitionWorker(aiService, {
     progress({ total: chunks.length, sourceCount: records.length });
     for (let index = 0; index < chunks.length; index += 1) {
       signal.throwIfAborted();
-      let part, retries = 0;
+      const inputRecords = chunks[index].filter((record) => !record.sectionLabel);
+      const headings = chunks[index].filter((record) => record.sectionLabel).map((record) => ({
+        sourceId: record.id, kind: 'section', reason: 'Заголовок раздела таблицы; проверьте его в сверке.', text: record.text,
+      }));
+      let part = inputRecords.length ? undefined : { models: [], warnings: [], unassigned: [] }, retries = 0;
       while (!part) {
         signal.throwIfAborted();
-        try { part = await aiService.run({ route, records: chunks[index], sourceFormat, context, signal }); }
+        try { part = await aiService.run({ route, records: inputRecords, sourceFormat, context, signal }); }
         catch (error) {
           signal.throwIfAborted();
           // Retry only an explicit short 429 pause, never malformed results or timeouts.
@@ -71,12 +87,13 @@ export function createRecognitionWorker(aiService, {
       models.push(...part.models);
       if (models.length > 300) throw new JobError('Распознано больше 300 моделей. Разделите источник.');
       warnings.push(...part.warnings);
+      unassigned.push(...headings);
       for (const item of part.unassigned) {
         const original = chunks[index].find((record) => record.id === item.sourceId);
         unassigned.push({ ...item, text: original.text });
-        if (item.kind === 'section') context = (context + '\n' + original.text).slice(-2000);
+        if (sourceFormat === 'text' && item.kind === 'section') context = (context + '\n' + original.text).slice(-2000);
       }
-      diagnostics.push({ part: index + 1, modelUsed: part.modelUsed, keyUsed: part.keyUsed, fallbackUsed: part.fallbackUsed });
+      if (inputRecords.length) diagnostics.push({ part: index + 1, modelUsed: part.modelUsed, keyUsed: part.keyUsed, fallbackUsed: part.fallbackUsed });
       progress({ completed: index + 1, modelCount: models.length, retryAt: 0, retryPart: 0 });
     }
     if (!models.length) {
@@ -87,6 +104,7 @@ export function createRecognitionWorker(aiService, {
           'Проверьте, что в тексте есть названия предметов, а не только названия разделов.'));
     }
     models.sort((a, b) => a.sourceIds[0] - b.sourceIds[0]);
+    unassigned.sort((a, b) => a.sourceId - b.sourceId);
     const currencies = new Set(models.filter((item) => item.price).map((item) => item.currency));
     let priceCurrency = currencies.size === 1 ? [...currencies][0] : currencies.size === 0 ? 'RUB' : 'UNKNOWN';
     if (currencies.size > 1 || priceCurrency === 'OTHER') {
@@ -99,7 +117,7 @@ export function createRecognitionWorker(aiService, {
       warnings.push('В исходнике разные или неподдерживаемые валюты. Цены сохранены в заметках; укажите рубли вручную.');
     }
     if (priceCurrency === 'UNKNOWN') warnings.push('Валюта цен не указана. Выберите валюту в предпросмотре; не принимайте эти числа за рубли автоматически.');
-    if (chunks.length > 1) warnings.push('Проверьте модели на границах частей: описание в нескольких строках могло разделиться.');
+    if (chunks.length > 1 && sourceFormat === 'text') warnings.push('Проверьте модели на границах частей: описание в нескольких строках могло разделиться.');
     if (unassigned.length) warnings.push(`Строки без модели: ${unassigned.length}, включая заголовки. Проверьте сверку перед переносом.`);
     const uniqueWarnings = [...new Set(warnings)];
     if (uniqueWarnings.length > 200) uniqueWarnings.splice(199, Infinity, 'Замечаний больше 200. Особенно внимательно проверьте все модели и исходные строки.');

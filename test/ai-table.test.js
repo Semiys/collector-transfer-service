@@ -101,3 +101,76 @@ test('zero models distinguishes AI classification from file loading and clears p
   assert.doesNotMatch(JSON.stringify(jobs.list('test')), /PRIVATE_/);
   assert.throws(() => jobs.result('test', job.id), /удалён/);
 });
+
+test('merged spreadsheet headings stay in audit and context follows each row across chunks', async () => {
+  const workbook = new ExcelJS.Workbook(), sheet = workbook.addWorksheet('Test');
+  sheet.addRow(['Number', 'Model Name', 'Year', 'Price']);
+  sheet.addRow(['Example Section A']); sheet.mergeCells('A2:D2');
+  for (let index = 1; index <= 16; index += 1) sheet.addRow([index, `Invented item ${index}`, '2020', '5']);
+  sheet.addRow(['Example Section B']); sheet.mergeCells('A19:D19');
+  sheet.addRow([17, 'Invented figure', '', '']);
+  const prepared = await prepareSource({ filename: 'example.xlsx', bytes: Buffer.from(await workbook.xlsx.writeBuffer()) });
+  assert.equal(prepared.records[0].sectionLabel, 'Example Section A');
+  assert.equal(prepared.records[17].sectionLabel, 'Example Section B');
+  let calls = 0;
+  const worker = createRecognitionWorker({ run: async ({ records, sourceFormat }) => {
+    calls += 1;
+    return recognizeCollectionRecords({ records, sourceFormat, apiKey: 'test-key', fetchImpl: async (_url, options) => {
+      const input = JSON.parse(JSON.parse(options.body).messages[1].content);
+      assert.ok(input.records.every(({ id }) => ![1, 18].includes(id)));
+      for (const record of input.records) assert.equal(record.sectionContext, record.id < 18 ? 'Example Section A' : 'Example Section B');
+      return response({ models: input.records.map(({ id }) => item(id)), warnings: [], unassigned: [] });
+    } });
+  } });
+  const result = await worker({ source: { prepared }, route: {}, signal: new AbortController().signal, progress() {} });
+  assert.equal(calls, 2);
+  assert.equal(result.models.length, 17);
+  assert.equal(result.audit.sourceCount, 19);
+  assert.equal(result.audit.assignedCount, 17);
+  assert.deepEqual(result.audit.unassigned.map(({ sourceId, kind }) => ({ sourceId, kind })),
+    [{ sourceId: 1, kind: 'section' }, { sourceId: 18, kind: 'section' }]);
+  assert.ok(!result.warnings.some((warning) => warning.includes('на границах частей')));
+});
+
+test('repeated full-width headings are recognized but sparse and partial rows are not discarded', async () => {
+  const rows = [{ Number: 'Example group', Name: 'Example group', Price: 'Example group' },
+    { Number: '', Name: 'Only named item', Price: '' }, { Number: 'Same', Name: 'Same', Price: '5' }];
+  const prepared = await prepareSource({ filename: 'example.json', bytes: Buffer.from(JSON.stringify(rows)) });
+  assert.equal(prepared.records[0].sectionLabel, 'Example group');
+  assert.ok(prepared.records.slice(1).every((record) => !record.sectionLabel));
+  assert.ok(prepared.records.slice(1).every((record) => record.sectionContext === 'Example group'));
+});
+
+test('heading-only input retains source coverage without sending an empty request to AI', async () => {
+  let calls = 0;
+  const worker = createRecognitionWorker({ run() { calls += 1; throw new Error('Must not send'); } });
+  await assert.rejects(worker({ source: { filename: 'example.json', bytes: Buffer.from(JSON.stringify([
+    { Number: 'Invented heading', Name: 'Invented heading', Price: 'Invented heading' },
+  ])) }, route: {}, signal: new AbortController().signal, progress() {} }), /к заголовкам 1/);
+  assert.equal(calls, 0);
+});
+
+test('inferred manufacturer and category get review notes and numeric brand is rejected', async () => {
+  const records = [1, 2, 3].map((id) => ({ id, text: `Invented item ${id}` }));
+  const result = await recognizeCollectionRecords({ records, apiKey: 'test-key', fetchImpl: async () => response({
+    models: [{ ...item(1), brandBasis: 'inferred', category: 'Фигурки', categoryBasis: 'inferred', tags: ['2020 г.', 'Example series'] },
+      { ...item(2), brand: '1990`', brandBasis: 'explicit', categoryBasis: 'unknown' },
+      { ...item(3), brandBasis: 'explicit', categoryBasis: 'unknown' }], warnings: [], unassigned: [],
+  }) });
+  assert.match(result.models[0].notes, /ИИ предположил: производитель/);
+  assert.match(result.models[0].notes, /ИИ предположил: категория/);
+  assert.deepEqual(result.models[0].tags, ['2020 г.', 'Example series']);
+  assert.equal(result.models[1].brand, '');
+  assert.match(result.models[1].notes, /1990`/);
+  assert.equal(result.models[2].notes, '');
+  assert.equal(result.warnings.length, 3);
+});
+
+test('invalid inferred dates and prices stay in notes instead of silently becoming source facts', async () => {
+  const result = await recognizeCollectionRecords({ records: [{ id: 1, text: 'Invented item' }], apiKey: 'test-key',
+    fetchImpl: async () => response({ models: [{ ...item(1), brand: '', brandBasis: 'unknown', categoryBasis: 'unknown',
+      purchaseDate: '2025-02-30', price: 'unknown price' }], unassigned: [], warnings: [] }) });
+  assert.equal(result.models[0].purchaseDate, ''); assert.equal(result.models[0].price, '');
+  assert.match(result.models[0].notes, /2025-02-30/); assert.match(result.models[0].notes, /unknown price/);
+  assert.equal(result.warnings.length, 2);
+});

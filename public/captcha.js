@@ -12,24 +12,29 @@
   }
 
   function loadScript() {
-    if (window.turnstile) return Promise.resolve(window.turnstile);
     scriptPromise ??= new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      const timeout = setTimeout(() => {
-        script.remove();
-        reject(new Error('Проверка человека не загрузилась. Проверьте интернет и повторите.'));
-      }, 15000);
+      let script, settled = false;
+      const finish = (error) => {
+        if (settled) return;
+        settled = true; clearTimeout(timeout);
+        if (error) { script?.remove(); reject(error); }
+        else resolve(window.turnstile);
+      };
+      // A loaded api.js is not necessarily a ready widget. Bound both phases,
+      // including retries when the global API already exists but is not ready.
+      const timeout = setTimeout(() => finish(new Error('Проверка человека не загрузилась. Проверьте интернет и повторите.')), 15000);
+      const ready = () => {
+        try {
+          if (!window.turnstile?.ready) throw new Error('Проверка человека не загрузилась.');
+          window.turnstile.ready(() => finish());
+        } catch { finish(new Error('Проверка человека не загрузилась. Повторите проверку.')); }
+      };
+      if (window.turnstile) { ready(); return; }
+      script = document.createElement('script');
       script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
       script.async = true;
-      script.onload = () => {
-        clearTimeout(timeout);
-        if (!window.turnstile) { reject(new Error('Проверка человека не загрузилась.')); return; }
-        window.turnstile.ready(() => resolve(window.turnstile));
-      };
-      script.onerror = () => {
-        clearTimeout(timeout); script.remove();
-        reject(new Error('Проверка человека недоступна. Проверьте интернет и повторите.'));
-      };
+      script.onload = ready;
+      script.onerror = () => finish(new Error('Проверка человека недоступна. Проверьте интернет и повторите.'));
       document.head.append(script);
     }).catch((error) => { scriptPromise = null; throw error; });
     return scriptPromise;
@@ -58,8 +63,9 @@
           status.textContent = config.testMode ? 'Тестовая проверка пройдена. Этот режим только для локальной разработки.' : 'Проверка пройдена.';
         },
         'expired-callback': () => { changed(''); status.textContent = 'Проверка устарела. Пройдите её снова.'; },
-        'error-callback': () => {
-          changed(''); status.textContent = 'Не удалось пройти проверку. Нажмите «Повторить проверку».';
+        'error-callback': (code) => {
+          const diagnostic = /^[a-z0-9_-]{1,20}$/i.test(String(code)) ? ` Код: ${code}.` : '';
+          changed(''); status.textContent = `Не удалось пройти проверку.${diagnostic} Нажмите «Повторить проверку».`;
           return true;
         },
       });

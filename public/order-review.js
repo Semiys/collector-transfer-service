@@ -38,7 +38,7 @@ export function createOrderReview({ onChange }) {
   }
   function snapshot() {
     const corrections = [...edits].map(([rowIndex, values]) => ({ rowIndex, values }));
-    const rows = parsed ? reviewRows(parsed, parsed.mapping, corrections) : [];
+    const rows = parsed ? reviewRows(parsed, parsed.mapping, corrections, { defaultBrand: get('order-brand').value }) : [];
     return { edits: corrections, rows, valid: rows.length > 0 && rows.every((row) => !Object.keys(rowProblems(row)).length) };
   }
   function render() {
@@ -64,6 +64,7 @@ export function createOrderReview({ onChange }) {
       get('order-model-list').append(card);
     }
   }
+  get('order-brand').addEventListener('input', () => { if (parsed && !locked) { render(); onChange(); } });
   function open(index) {
     if (locked || !parsed) return;
     selected = index; const row = snapshot().rows[index];

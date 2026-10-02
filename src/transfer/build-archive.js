@@ -16,7 +16,7 @@ export async function buildArchive({ parsed, mapping, options, edits = [], eurRa
   if (parsed.warnings?.length && options.acceptTextWarnings !== true) {
     throw new Error('Проверьте непрочитанные строки текста и подтвердите перенос');
   }
-  const mapped = reviewRows(parsed, mapping, edits);
+  const mapped = reviewRows(parsed, mapping, edits, { defaultBrand: options.defaultBrand });
   if (mapped.length > MAX_MODELS) throw new Error(`За один раз можно перенести не более ${MAX_MODELS} моделей`);
   for (const row of mapped) {
     const errors = Object.values(rowProblems(row));

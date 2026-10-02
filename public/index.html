@@ -109,11 +109,15 @@
         <label for="category">Категория для строк без категории
           <input id="category" type="text" value="Без категории" maxlength="100">
         </label>
+        <label for="default-brand">Производитель для моделей без бренда
+          <input id="default-brand" type="text" maxlength="200" placeholder="Например, Hot Wheels">
+        </label>
         <label for="default-scale">Масштаб для автомобилей без масштаба
           <select id="default-scale"><option value="">Не подставлять</option><option value="1:64">1:64</option></select>
         </label>
       </div>
       <p class="note">Если все ваши машинки имеют масштаб 1:64, выберите его здесь. Для аксессуаров масштаб не подставляется.</p>
+      <p class="note">Бренд — производитель коллекционного предмета. Укажите общий бренд, только если знаете его; заполненные бренды и ваши исправления сохранятся.</p>
       <p class="note">Если в источнике нет даты покупки, будет указана сегодняшняя дата переноса с пометкой в заметках. Дата добавления в Hunt64 не считается датой покупки.</p>
       <p id="rate" class="note"></p>
       <p class="note">Берём только столбец с личным фото. Сейчас ссылки Hunt64 поддерживаются автоматически; WebP преобразуется в JPG. Недоступное фото заменяется заглушкой с пометкой. Импорт в приложении добавляет модели, а не ищет дубликаты.</p>
@@ -153,6 +157,7 @@
     const status = document.getElementById('status');
     const currency = document.getElementById('currency');
     const defaultScale = document.getElementById('default-scale');
+    const defaultBrand = document.getElementById('default-brand');
     const rate = document.getElementById('rate');
     const download = document.getElementById('download');
     let preview;
@@ -172,7 +177,7 @@
     const confirmPreview = document.getElementById('confirm-preview');
     function setConverting(value) {
       converting = value;
-      for (const control of document.querySelectorAll('#source-file, #source-text, #method-file, #method-text, #text-format, #parse-text, #parse-json, #mappings select, #currency, #category, #default-scale, #confirm-preview, #accept-warnings, #free-captcha-retry')) {
+      for (const control of document.querySelectorAll('#source-file, #source-text, #method-file, #method-text, #text-format, #parse-text, #parse-json, #mappings select, #currency, #category, #default-scale, #default-brand, #confirm-preview, #accept-warnings, #free-captcha-retry')) {
         control.disabled = value;
       }
     }
@@ -236,7 +241,7 @@
       body.replaceChildren();
       let rows;
       invalidRows = 0;
-      try { rows = reviewRows(preview, mapping(), corrections()); }
+      try { rows = reviewRows(preview, mapping(), corrections(), { defaultBrand: defaultBrand.value }); }
       catch (error) { invalidRows = 1; reviewStatus.className = 'status error'; reviewStatus.textContent = error.message; updateDownload(); return; }
       rows.forEach((row, index) => {
         const problems = rowProblems(row);
@@ -296,7 +301,7 @@
       document.getElementById('editor-currency').textContent = currency.value === 'EUR' ? 'Цена в евро. При сборке архива она пересчитается в рубли.' :
         currency.value === 'RUB' ? 'Цена в рублях.' : 'Перед скачиванием выберите валюту для всей коллекции.';
       editor.querySelector('details').open = false;
-      fillEditor(reviewRows(preview, mapping(), corrections())[index]);
+      fillEditor(reviewRows(preview, mapping(), corrections(), { defaultBrand: defaultBrand.value })[index]);
       editor.showModal(); document.getElementById('edit-name').focus({ preventScroll: true }); editor.scrollTop = 0;
     }
     for (const [field, text] of Object.entries(fields)) {
@@ -317,7 +322,7 @@
     document.getElementById('editor-cancel').addEventListener('click', () => editor.close());
     editor.addEventListener('close', () => { editorForm.reset(); editorStatus.textContent = ''; editorIndex = null; });
     document.getElementById('editor-reset').addEventListener('click', () => {
-      if (editorIndex !== null) fillEditor(reviewRows(preview, mapping())[editorIndex]);
+      if (editorIndex !== null) fillEditor(reviewRows(preview, mapping(), [], { defaultBrand: defaultBrand.value })[editorIndex]);
     });
     editorForm.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -334,7 +339,7 @@
         editorStatus.textContent = 'Исправьте отмеченные поля.';
         document.getElementById(`edit-${Object.keys(problems)[0]}`).focus(); return;
       }
-      const original = reviewRows(preview, mapping())[editorIndex];
+      const original = reviewRows(preview, mapping(), [], { defaultBrand: defaultBrand.value })[editorIndex];
       const changed = Object.fromEntries(Object.entries(values).filter(([field, value]) => {
         if (field !== 'tags') return value !== original[field];
         try { return JSON.stringify(parseTags(value)) !== JSON.stringify(parseTags(original.tags)); }
@@ -395,7 +400,8 @@
         warningsPanel.classList.toggle('hidden', !data.warnings?.length);
         for (const warning of data.warnings ?? []) {
           const item = document.createElement('li');
-          item.textContent = `${warning.line === 'ИИ' ? 'ИИ' : `Строка ${warning.line}`}: ${warning.text}`;
+          const label = warning.line === 'ИИ' ? 'ИИ' : data.type === 'ai-json' ? `Замечание ${warning.line}` : `Строка ${warning.line}`;
+          item.textContent = `${label}: ${warning.text}`;
           warningList.append(item);
         }
         mappings.replaceChildren();
@@ -462,6 +468,7 @@
     });
     currency.addEventListener('change', () => { invalidateConfirmation(); updateRate(); });
     defaultScale.addEventListener('change', () => { if (preview) { invalidateConfirmation(); renderRows(); } });
+    defaultBrand.addEventListener('input', () => { if (preview) { invalidateConfirmation(); renderRows(); } });
     document.getElementById('category').addEventListener('input', () => { if (preview) { invalidateConfirmation(); renderRows(); } });
 
     download.addEventListener('click', async () => {
@@ -485,7 +492,7 @@
       const now = new Date();
       const transferDate = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
       form.append('options', JSON.stringify({ priceCurrency: currency.value, defaultCategory: document.getElementById('category').value,
-        defaultScale: defaultScale.value,
+        defaultScale: defaultScale.value, defaultBrand: defaultBrand.value,
         transferDate, expectedRateDate: eurRate?.date,
         acceptTextWarnings: !preview.warnings?.length || document.getElementById('accept-warnings').checked }));
       try {

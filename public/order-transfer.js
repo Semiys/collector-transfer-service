@@ -75,7 +75,7 @@ export function createOrderTransfer({ onOrderChange, onAccessUnavailable }) {
     previewGeneration += 1; clearTimeout(expiryTimer); downloadController?.abort(); downloadController = null;
     previewReady = false; review.clear(); resetReceipt(); downloadRequestId = null; rate = null; loadingRate = false;
     releaseDownloads();
-    for (const id of ['order-currency', 'order-date', 'order-category', 'order-scale']) get(id).value = '';
+    for (const id of ['order-currency', 'order-date', 'order-category', 'order-scale', 'order-brand']) get(id).value = '';
     for (const id of ['order-confirm-audit', 'order-confirm-models', 'order-confirm-warnings']) get(id).checked = false;
     get('order-rate-status').textContent = ''; zipCaptcha.reset();
     get('order-models').hidden = true;
@@ -249,8 +249,8 @@ export function createOrderTransfer({ onOrderChange, onAccessUnavailable }) {
     } catch (error) { if (current === generation) message(error.message, true); }
     finally { if (current === generation) { busy = false; controls(); } }
   });
-  for (const id of ['order-currency', 'order-date', 'order-category', 'order-scale']) {
-    get(id).addEventListener(id === 'order-category' ? 'input' : 'change', resetDelivery);
+  for (const id of ['order-currency', 'order-date', 'order-category', 'order-scale', 'order-brand']) {
+    get(id).addEventListener(['order-category', 'order-brand'].includes(id) ? 'input' : 'change', resetDelivery);
   }
   for (const id of ['order-confirm-audit', 'order-confirm-models', 'order-confirm-warnings']) {
     get(id).addEventListener('change', () => { zipCaptcha.reset(); controls(); });
@@ -275,7 +275,8 @@ export function createOrderTransfer({ onOrderChange, onAccessUnavailable }) {
     if (get('order-download').disabled) return;
     const current = generation, version = previewGeneration, selectedJob = job.id;
     const options = { priceCurrency: get('order-currency').value, defaultCategory: get('order-category').value,
-      defaultScale: get('order-scale').value, transferDate: get('order-date').value, acceptTextWarnings: true,
+      defaultScale: get('order-scale').value, defaultBrand: get('order-brand').value,
+      transferDate: get('order-date').value, acceptTextWarnings: true,
       ...(get('order-currency').value === 'EUR' ? { expectedRateDate: rate.date } : {}) };
     const payload = { jobId: selectedJob, confirmedAudit: true, confirmedModels: true, options,
       edits: review.snapshot().edits, captchaToken: zipCaptcha.token };

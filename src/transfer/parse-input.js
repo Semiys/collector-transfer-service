@@ -90,16 +90,23 @@ async function parseExcel(bytes) {
     throw new Error('Первая строка Excel должна содержать названия столбцов');
   }
   if (new Set(headers).size !== headers.length) throw new Error('Названия столбцов Excel повторяются');
-  const rows = [];
+  const rows = [], sections = [];
   for (let number = 2; number <= sheet.rowCount; number += 1) {
     const row = sheet.getRow(number);
     const values = headers.map((_, index) => cellText(row.getCell(index + 1)));
     if (values.every((value) => !value)) continue;
+    // ExcelJS exposes the master's value in every merged cell. Keep the row
+    // for audit, but retain its layout so a full-width heading is not a model.
+    const cells = headers.map((_, index) => row.getCell(index + 1));
+    const master = cells[0].master;
+    if (cells.length > 1 && master.row === number && cells.every((cell) => cell.master === master)) {
+      sections.push({ rowIndex: rows.length, label: values.find(Boolean) });
+    }
     rows.push(Object.fromEntries(headers.map((header, index) => [header, values[index]])));
     if (rows.length > MAX_ROWS) throw new Error('Слишком много строк Excel (не более 10 000)');
   }
   if (rows.length === 0) throw new Error('На первом листе Excel нет моделей');
-  return { headers, rows };
+  return { headers, rows, sections };
 }
 
 export async function parseInput(filename, bytes) {
