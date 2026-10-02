@@ -4,7 +4,7 @@ import { CaptchaError } from '../http/captcha.js';
 import { concurrencyLimit, rateLimit } from '../http/limits.js';
 import { DEFAULT_GROQ_MODEL } from '../ai/groq.js';
 
-export const PROCESSING_VERSION = '2026-10-02.3';
+export const PROCESSING_VERSION = '2026-10-02.4';
 
 export async function automaticDisclosure(store) {
   const accounts = store ? await store.list() : [];

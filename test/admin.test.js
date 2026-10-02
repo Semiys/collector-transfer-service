@@ -42,7 +42,7 @@ test('admin API requires a session and owner consent', async () => {
   app.use('/api/admin/session', auth.router);
   app.use('/api/admin', createAdminRouter({ store, auth, fetchImpl: async (_url, options) => {
     sentAuthorization = options.headers.Authorization;
-    return new Response(JSON.stringify({ data: [{ id: 'openai/gpt-oss-20b', active: true }] }), { status: 200 });
+    return new Response(JSON.stringify({ data: [{ id: 'openai/gpt-oss-120b', active: true }] }), { status: 200 });
   } }));
   const server = app.listen(0, '127.0.0.1');
   try {
@@ -68,7 +68,7 @@ test('admin API requires a session and owner consent', async () => {
     const listed = await (await fetch(base, { headers })).json();
     assert.equal(listed.accounts.length, 1);
     const checkResponse = await fetch(`${base}/${added.id}/check`, { headers });
-    assert.deepEqual(await checkResponse.json(), { valid: true, model: 'openai/gpt-oss-20b', modelAvailable: true });
+    assert.deepEqual(await checkResponse.json(), { valid: true, model: 'openai/gpt-oss-120b', modelAvailable: true });
     assert.equal(sentAuthorization, `Bearer ${fakeKey}`);
     const logout = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/session`,
       { method: 'DELETE', headers });

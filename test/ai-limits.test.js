@@ -16,16 +16,16 @@ test('key check validates Groq authorization and listed model without exposing o
   const status = await getKeyStatus({ apiKey: 'private-key', fetchImpl: async (url, options) => {
     assert.equal(url, 'https://api.groq.com/openai/v1/models');
     assert.equal(options.headers.Authorization, 'Bearer private-key');
-    return jsonResponse({ data: [{ id: 'openai/gpt-oss-20b', active: true, extra: 'private-key' }] });
+    return jsonResponse({ data: [{ id: 'openai/gpt-oss-120b', active: true, extra: 'private-key' }] });
   } });
-  assert.deepEqual(status, { valid: true, model: 'openai/gpt-oss-20b', modelAvailable: true });
+  assert.deepEqual(status, { valid: true, model: 'openai/gpt-oss-120b', modelAvailable: true });
   assert.equal(JSON.stringify(status).includes('private-key'), false);
 });
 
 test('key check does not invent quota or expose malformed upstream responses', async () => {
-  for (const data of [[], [{ id: 'other-model' }], [{ id: 'openai/gpt-oss-20b', active: false }]]) {
+  for (const data of [[], [{ id: 'other-model' }], [{ id: 'openai/gpt-oss-20b', active: true }], [{ id: 'openai/gpt-oss-120b', active: false }]]) {
     assert.deepEqual(await getKeyStatus({ apiKey: 'key', fetchImpl: async () => jsonResponse({ data }) }),
-      { valid: true, model: 'openai/gpt-oss-20b', modelAvailable: false });
+      { valid: true, model: 'openai/gpt-oss-120b', modelAvailable: false });
   }
   assert.equal((await getKeyStatus({ apiKey: 'key', fetchImpl: async () => new Response('', { status: 401 }) })).valid, false);
   await assert.rejects(getKeyStatus({ apiKey: 'key', fetchImpl: async () => new Response(privateText) }),

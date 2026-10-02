@@ -56,7 +56,7 @@ export function createAiService({ store, fetchImpl = fetch, now = Date.now }) {
       fallbackAccountIds: options.consentToAccountSwitch === true ? [...options.fallbackAccountIds] : [],
       accounts };
   }
-  async function run({ route, text, records, context, signal }) {
+  async function run({ route, text, records, sourceFormat, context, signal }) {
     const release = await acquire(signal);
     try {
       signal?.throwIfAborted();
@@ -73,7 +73,7 @@ export function createAiService({ store, fetchImpl = fetch, now = Date.now }) {
         const current = state(account.id);
         try {
           const options = { apiKey: account.apiKey, fetchImpl, signal };
-          const result = records ? await recognizeCollectionRecords({ ...options, records, context }) :
+          const result = records ? await recognizeCollectionRecords({ ...options, records, sourceFormat, context }) :
             await recognizeCollectionText({ ...options, text });
           return { ...result, keyUsed: { id: account.id, owner: account.owner, label: account.label },
             fallbackUsed: account.id !== route.accountId };

@@ -115,7 +115,7 @@ test('chunked recognition preserves duplicates, section context, coverage and EU
   const calls = [];
   const ai = createAiService({ store: { getEnabledAccounts: async () => [primary] }, fetchImpl: async (_url, options) => {
     const body = JSON.parse(options.body), input = JSON.parse(body.messages[1].content); calls.push(input);
-    assert.equal(body.model, 'openai/gpt-oss-20b');
+    assert.equal(body.model, 'openai/gpt-oss-120b');
     assert.equal(body.response_format.type, 'json_schema');
     assert.equal(body.response_format.json_schema.strict, true);
     return upstream({ models: input.records.filter((item) => item.id !== 1).map((item) => model(item.id, 'Same car')),

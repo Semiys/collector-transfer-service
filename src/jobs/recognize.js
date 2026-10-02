@@ -3,6 +3,7 @@ import { JobError } from './store.js';
 
 export async function prepareSource({ filename, bytes }) {
   let records;
+  let sourceFormat = 'text';
   if (filename.toLowerCase().endsWith('.txt')) {
     let text;
     try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
@@ -14,6 +15,7 @@ export async function prepareSource({ filename, bytes }) {
     try { parsed = await parseInput(filename, bytes); }
     catch { throw new JobError('Не удалось прочитать таблицу. Поддерживаются CSV, XLSX и JSON со списком объектов.'); }
     records = parsed.rows.map((row, index) => ({ id: index + 1, text: JSON.stringify(row) }));
+    sourceFormat = 'table';
   }
   if (!records.length || records.length > 300) throw new JobError('Нужно от 1 до 300 непустых строк. Разделите источник на части.');
   if (records.some((item) => item.text.length > 8000) || records.reduce((sum, item) => sum + item.text.length, 0) > 200_000) {
@@ -27,14 +29,14 @@ export async function prepareSource({ filename, bytes }) {
   }
   if (chunk.length) chunks.push(chunk);
   if (chunks.length > 30) throw new JobError('Для исходника нужно больше 30 частей. Разделите его.');
-  return { records, chunks, numbering: filename.toLowerCase().endsWith('.txt') ?
+  return { records, chunks, sourceFormat, numbering: filename.toLowerCase().endsWith('.txt') ?
     'Номера строк исходного текста, включая пропущенные пустые строки.' :
     'Номера непустых записей таблицы, начиная с 1, без строки названий столбцов.' };
 }
 
 export function createRecognitionWorker(aiService) {
   return async ({ source, route, signal, progress, releaseSource = () => {} }) => {
-    const { records, chunks, numbering } = source.prepared ?? await prepareSource(source);
+    const { records, chunks, numbering, sourceFormat = 'text' } = source.prepared ?? await prepareSource(source);
     source = null;
     releaseSource();
     signal.throwIfAborted();
@@ -44,7 +46,7 @@ export function createRecognitionWorker(aiService) {
     for (let index = 0; index < chunks.length; index += 1) {
       signal.throwIfAborted();
       let part;
-      try { part = await aiService.run({ route, records: chunks[index], context, signal }); }
+      try { part = await aiService.run({ route, records: chunks[index], sourceFormat, context, signal }); }
       catch (error) { signal.throwIfAborted(); throw new JobError(`Часть ${index + 1}: ${error.message}`); }
       models.push(...part.models);
       if (models.length > 300) throw new JobError('Распознано больше 300 моделей. Разделите источник.');
@@ -57,7 +59,13 @@ export function createRecognitionWorker(aiService) {
       diagnostics.push({ part: index + 1, modelUsed: part.modelUsed, keyUsed: part.keyUsed, fallbackUsed: part.fallbackUsed });
       progress({ completed: index + 1, modelCount: models.length });
     }
-    if (!models.length) throw new JobError('ИИ не нашёл моделей. Проверьте исходник и разделение строк.');
+    if (!models.length) {
+      const sections = unassigned.filter((item) => item.kind === 'section').length;
+      throw new JobError(`Исходник прочитан: ${records.length} непустых записей. ` +
+        `ИИ не выделил ни одной модели: отнёс к заголовкам ${sections}, к неясным записям ${unassigned.length - sections}. ` +
+        (sourceFormat === 'table' ? 'Проверьте столбец с названием или артикулом и попробуйте небольшой пример. Это не ошибка загрузки файла.' :
+          'Проверьте, что в тексте есть названия предметов, а не только названия разделов.'));
+    }
     models.sort((a, b) => a.sourceIds[0] - b.sourceIds[0]);
     const currencies = new Set(models.filter((item) => item.price).map((item) => item.currency));
     let priceCurrency = currencies.size === 1 ? [...currencies][0] : currencies.size === 0 ? 'RUB' : 'UNKNOWN';

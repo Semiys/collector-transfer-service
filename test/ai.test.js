@@ -30,7 +30,7 @@ test('AI result reaches the existing reviewed JSON to ZIP path', async () => {
   assert.equal(sent.url, 'https://api.groq.com/openai/v1/chat/completions');
   assert.equal(sent.options.headers.Authorization, `Bearer ${apiKey}`);
   const body = JSON.parse(sent.options.body);
-  assert.equal(body.model, 'openai/gpt-oss-20b');
+  assert.equal(body.model, 'openai/gpt-oss-120b');
   assert.equal(body.plugins, undefined);
   assert.equal(body.response_format.type, 'json_schema');
   assert.equal(body.provider, undefined);
@@ -40,7 +40,7 @@ test('AI result reaches the existing reviewed JSON to ZIP path', async () => {
   assert.equal(body.include_reasoning, false);
   assert.equal(body.reasoning_format, undefined);
   assert.equal(result.transferSource, 'groq-ai-v1');
-  assert.equal(result.modelUsed, 'openai/gpt-oss-20b');
+  assert.equal(result.modelUsed, 'openai/gpt-oss-120b');
   const parsed = await parseInput('recognized.json', Buffer.from(JSON.stringify(result)));
   assert.equal(parsed.type, 'ai-json');
   assert.equal(parsed.warnings.length, 2);

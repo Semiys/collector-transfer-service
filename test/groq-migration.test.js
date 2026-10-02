@@ -52,7 +52,7 @@ test('new encryption setting and old .env remain compatible; conflicting keys fa
   }
   assert.throws(() => createApp({ env: { DATA_DIR: dataDir, AI_KEY_ENC_KEY: key, OPENROUTER_KEY_ENC_KEY: otherKey } }),
     error => /должны совпадать/.test(error.message) && !error.message.includes(key) && !error.message.includes(otherKey));
-  assert.equal(PROCESSING_VERSION, '2026-10-02.3');
+  assert.equal(PROCESSING_VERSION, '2026-10-02.4');
 });
 
 test('Groq oversized request fails clearly without exposing raw upstream data', async () => {
