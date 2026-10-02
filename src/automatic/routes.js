@@ -5,7 +5,7 @@ import { concurrencyLimit, rateLimit } from '../http/limits.js';
 
 export const PROCESSING_VERSION = '2026-10-01';
 
-async function disclosure(store) {
+export async function automaticDisclosure(store) {
   const accounts = store ? await store.list() : [];
   const owners = new Set();
   const route = accounts.filter((account) => {
@@ -15,6 +15,7 @@ async function disclosure(store) {
     return true;
   }).slice(0, 3).map(({ id, owner }) => ({ id, owner }));
   return {
+    route,
     owners: route.map(({ owner }) => owner),
     revision: createHash('sha256').update(JSON.stringify(route)).digest('hex'),
   };
@@ -25,7 +26,7 @@ export function createAutomaticRouter({ captcha, store }) {
   router.use((_request, response, next) => { response.set('Cache-Control', 'no-store'); next(); });
   router.get('/config', async (_request, response) => {
     try {
-      const route = await disclosure(store);
+      const route = await automaticDisclosure(store);
       response.json({ policyVersion: PROCESSING_VERSION, owners: route.owners,
         routeRevision: route.revision, aiConfigured: route.owners.length > 0,
         processingAvailable: false, paymentAvailable: false });
@@ -50,7 +51,7 @@ export function createAutomaticRouter({ captcha, store }) {
         if (body.consentToAI !== true || body.acceptProcessing !== true) {
           throw new CaptchaError('Подтвердите условия обработки и отправку данных внешнему ИИ.', 400);
         }
-        const route = await disclosure(store);
+        const route = await automaticDisclosure(store);
         if (!route.owners.length) throw new CaptchaError('Ключи ИИ ещё не настроены администратором.', 503);
         if (body.routeRevision !== route.revision) {
           throw new CaptchaError('Список владельцев ключей изменился. Обновите страницу и подтвердите условия снова.', 409);

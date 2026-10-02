@@ -1,3 +1,5 @@
+import { createOrderTransfer } from '/order-transfer.js';
+
 (() => {
   const get = (id) => document.getElementById(id);
   const code = get('order-code'), check = get('order-check'), show = get('order-show');
@@ -7,13 +9,30 @@
   const processing = { idle: 'Ещё не запускался', running: 'Идёт распознавание', ready: 'Модели готовы к проверке',
     completed: 'Перенос завершён', failed: 'Обработка не завершилась', interrupted: 'Прерван перезапуском сервера' };
   let available = false, busy = false, initializing = false, version = 0, controller = null;
+  const transfer = createOrderTransfer({ onOrderChange: (order) => renderOrder(order, true),
+    onAccessUnavailable: (message) => { clearResult(); status.className = 'error'; status.textContent = message; } });
   function controls() {
     code.disabled = busy || !available;
     check.disabled = busy || !available || !code.value.trim();
     show.disabled = busy || !available || !code.value;
   }
   function hideCode() { code.type = 'password'; show.textContent = 'Показать код'; show.setAttribute('aria-pressed', 'false'); }
-  function clearResult() { result.hidden = true; for (const id of ['order-number', 'order-price', 'order-payment', 'order-processing', 'order-updated', 'order-next']) get(id).textContent = ''; }
+  function clearResult() { transfer.clear(); result.hidden = true; for (const id of ['order-number', 'order-price', 'order-payment', 'order-processing', 'order-updated', 'order-next']) get(id).textContent = ''; }
+  function renderOrder(order, processingAvailable) {
+    get('order-number').textContent = `Номер: ${order.id}`;
+    get('order-price').textContent = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(order.amountMinor / 100);
+    get('order-payment').textContent = payments[order.paymentState];
+    get('order-processing').textContent = processing[order.processingState];
+    get('order-updated').textContent = new Date(order.updatedAt).toLocaleString('ru-RU');
+    get('order-next').textContent = order.processingState === 'completed' ?
+      'Перенос завершён по вашему подтверждению. Результат удалён с сервера; используйте сохранённый ZIP.' :
+      order.processingState === 'interrupted' ?
+      'Для повтора загрузите исходник снова. Сведения об оплате сохраняются.' :
+      order.canRetry && processingAvailable ? 'Можно загрузить коллекцию в форме ниже.' :
+      order.canRetry ? 'Запуск сейчас недоступен. Попробуйте позже.' :
+      order.processingState === 'ready' ? processingAvailable ? 'Модели готовы. Откройте результат ниже, пока не истёк срок.' : 'Модели готовы, но просмотр сейчас недоступен.' :
+        'Состояние можно проверить снова этой же кнопкой.';
+  }
   function reset() {
     version += 1; controller?.abort(); controller = null; busy = false;
     code.value = ''; hideCode(); clearResult(); status.className = ''; status.textContent = ''; controls();
@@ -55,19 +74,10 @@
       const order = data.order;
       if (!order || !Number.isSafeInteger(order.amountMinor) || order.currency !== 'RUB' ||
           !payments[order.paymentState] || !processing[order.processingState]) throw new Error();
-      get('order-number').textContent = `Номер: ${order.id}`;
-      get('order-price').textContent = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(order.amountMinor / 100);
-      get('order-payment').textContent = payments[order.paymentState];
-      get('order-processing').textContent = processing[order.processingState];
-      get('order-updated').textContent = new Date(order.updatedAt).toLocaleString('ru-RU');
-      get('order-next').textContent = order.processingState === 'interrupted' ?
-        'После запуска услуги для повтора потребуется снова загрузить исходник. Сведения об оплате сохраняются.' :
-        order.canRetry && order.attempts === 0 ? 'Заказ оплачен. Запуск станет доступен вместе с автоматическим переносом.' :
-        order.canRetry ? 'Заказ допускает повтор. Его запуск станет доступен вместе с автоматическим переносом.' :
-          order.processingState === 'ready' ? 'Следующий этап — проверка моделей и подготовка ZIP. Этот путь ещё разрабатывается.' :
-            'Состояние можно проверить снова этой же кнопкой.';
+      renderOrder(order, data.processingAvailable);
       result.hidden = false; status.className = 'success'; status.textContent = 'Заказ найден.';
       get('order-result-title').focus({ preventScroll: true });
+      void transfer.open({ code: accessCode, order, processingAvailable: data.processingAvailable });
     } catch {
       if (current !== version) return;
       status.className = 'error'; status.textContent = 'Не удалось связаться с сервисом. Проверьте соединение и повторите.';

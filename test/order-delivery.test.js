@@ -13,6 +13,9 @@ import { createJobStore } from '../src/jobs/store.js';
 import { buildArchive } from '../src/transfer/build-archive.js';
 import { createArchiveCapacity } from '../src/transfer/archive-capacity.js';
 import { placeholderPhoto } from '../src/transfer/photos.js';
+import express from 'express';
+import { createGuestTransferRouter } from '../src/orders/transfer-routes.js';
+import { formatOrderAccess } from '../src/orders/access.js';
 
 const photoUrl = 'https://juegmurcnhnfnvsqsqxn.supabase.co/storage/v1/object/public/collection-photos/test.jpg';
 const rejects = (promise, status) => assert.rejects(promise, (error) => error.statusCode === status && !error.message.includes('PRIVATE_ERROR'));
@@ -60,6 +63,79 @@ async function fixture(t, { build, getRate, photo = false, unblock, paid = true,
   return f;
 }
 const documentOf = (archive) => JSON.parse(strFromU8(unzipSync(archive)['collection.json']));
+
+test('one disconnected ZIP reader does not stop an identical build for another reader', async (t) => {
+  let release, signal, builds = 0;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const f = await fixture(t, { unblock: release, build: async (input) => {
+    builds += 1; signal = input.signal; await gate; return buildArchive(input);
+  } });
+  const input = f.input(), first = new AbortController(), second = new AbortController();
+  const stopped = rejects(f.delivery.build(input, { signal: first.signal }), 409);
+  const surviving = f.delivery.build(input, { signal: second.signal });
+  await waitFor(() => builds === 1);
+  // Let both asynchronous ownership checks finish before disconnecting a joined reader.
+  await f.state(); await delay(0); first.abort(); await stopped;
+  assert.equal(signal.aborted, false); release();
+  const result = await surviving; assert.equal(documentOf(result.archive).models.length, 2);
+  assert.equal(builds, 1); assert.equal((await f.state()).processingState, 'ready');
+});
+
+test('all disconnected ZIP readers abort work but keep capacity until the actual builder stops', async (t) => {
+  let release, signal, builds = 0;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const f = await fixture(t, { unblock: release, build: async (input) => {
+    builds += 1; signal = input.signal; await gate; return buildArchive(input);
+  } });
+  const input = f.input(), first = new AbortController(), second = new AbortController();
+  const stopped = [first, second].map((controller) => rejects(f.delivery.build(input, { signal: controller.signal }), 409));
+  await waitFor(() => builds === 1);
+  await f.state(); await delay(0);
+  first.abort(); second.abort(); await Promise.all(stopped); assert.equal(signal.aborted, true);
+  await rejects(f.delivery.build(input), 409);
+  await rejects(f.capacity.run(async () => 'must not run'), 503);
+  assert.equal((await f.state()).processingState, 'ready'); release();
+  await waitFor(async () => { try { await f.capacity.run(async () => true); return true; } catch { return false; } });
+  await delay(0);
+  const result = await f.delivery.build(input); assert.equal(documentOf(result.archive).models.length, 2);
+  assert.equal(builds, 2); assert.equal(f.aiCalls(), 1); assert.equal((await f.state()).attempts, 1);
+});
+
+test('an already disconnected ZIP request never starts assembly', async (t) => {
+  let builds = 0;
+  const f = await fixture(t, { build: async () => { builds += 1; throw new Error('must not run'); } });
+  const controller = new AbortController(); controller.abort();
+  await rejects(f.delivery.build(f.input(), { signal: controller.signal }), 409);
+  assert.equal(builds, 0); assert.equal((await f.state()).processingState, 'ready');
+});
+
+test('closing the HTTP download propagates cancellation without deleting the paid result', async (t) => {
+  let release, signal;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const f = await fixture(t, { unblock: release, build: async (input) => {
+    signal = input.signal; await gate; return buildArchive(input);
+  } });
+  const app = express(); app.use('/api/orders/transfer', createGuestTransferRouter({
+    orders: f.orders, delivery: f.delivery, processing: {}, store: {},
+    captcha: { publicConfig: () => ({ configured: true }), verify: async ({ action }) => assert.equal(action, 'collection_order_zip') },
+  }));
+  const server = app.listen(0, '127.0.0.1'); await new Promise((resolve) => server.once('listening', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const input = f.input(), controller = new AbortController();
+  const request = fetch(`http://127.0.0.1:${server.address().port}/api/orders/transfer/build`, {
+    method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json',
+      'Idempotency-Key': input.requestId, 'X-Order-Code': formatOrderAccess(f.identity) },
+    body: JSON.stringify({ jobId: input.jobId, confirmedAudit: true, confirmedModels: true,
+      edits: [], options: input.options, captchaToken: 'fake' }),
+  });
+  const failed = assert.rejects(request, { name: 'AbortError' });
+  await waitFor(() => !!signal); controller.abort(); await failed; await waitFor(() => signal.aborted);
+  await rejects(f.capacity.run(async () => 'must not run'), 503);
+  assert.equal((await f.state()).processingState, 'ready'); release();
+  await waitFor(async () => { try { await f.capacity.run(async () => true); return true; } catch { return false; } });
+  assert.equal((await f.delivery.preview(f.identity)).rows.length, 2);
+  assert.equal((await f.state()).attempts, 1);
+});
 
 test('paid preview uses the owned server result, copies audit and omits provider diagnostics', async (t) => {
   const unpaid = await fixture(t, { paid: false });

@@ -22,6 +22,7 @@ import { createOrderProcessing, createOrderJobLifecycle } from './orders/process
 import { createGuestOrdersRouter } from './orders/guest-routes.js';
 import { createOrderDelivery } from './orders/delivery.js';
 import { createArchiveCapacity } from './transfer/archive-capacity.js';
+import { createGuestTransferRouter, guestProcessingConfigured } from './orders/transfer-routes.js';
 
 export function createApp({ captcha, env = process.env, accountStore: suppliedStore, orderStore: suppliedOrders, aiFetchImpl = fetch } = {}) {
   captcha ??= createTurnstile({ env });
@@ -78,12 +79,17 @@ export function createApp({ captcha, env = process.env, accountStore: suppliedSt
   app.use('/api/automatic', createAutomaticRouter({ captcha, store: accountStore }));
   const orderPageHeaders = (_request, response, next) => {
     response.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff',
-      'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'" });
+      'Content-Security-Policy': "default-src 'none'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; style-src 'self'; font-src 'self'; connect-src 'self' https://challenges.cloudflare.com; form-action 'self'; base-uri 'none'; frame-ancestors 'none'" });
     next();
   };
   app.get('/order', orderPageHeaders, (_request, response) => response.sendFile(path.resolve(currentDirectory, '../public/order.html')));
   app.get('/order.js', orderPageHeaders, (_request, response) => response.sendFile(path.resolve(currentDirectory, '../public/order.js')));
-  app.use('/api/orders', createGuestOrdersRouter({ orders: orderStore }));
+  app.get('/order-transfer.js', orderPageHeaders, (_request, response) => response.sendFile(path.resolve(currentDirectory, '../public/order-transfer.js')));
+  app.get('/order-review.js', orderPageHeaders, (_request, response) => response.sendFile(path.resolve(currentDirectory, '../public/order-review.js')));
+  app.use('/api/orders/transfer', createGuestTransferRouter({ orders: orderStore, processing: orderProcessing,
+    delivery: orderDelivery, store: accountStore, captcha }));
+  app.use('/api/orders', createGuestOrdersRouter({ orders: orderStore,
+    processingConfigured: guestProcessingConfigured({ orders: orderStore, store: accountStore, captcha }) }));
   app.get('/theme.css', (_request, response) => response.sendFile(themeStylePath));
   app.get('/theme.js', (_request, response) => response.sendFile(themeScriptPath));
   for (const module of ['mapping', 'review']) {

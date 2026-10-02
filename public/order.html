@@ -7,7 +7,8 @@
   <meta name="description" content="Проверка состояния заказа переноса коллекции">
   <title>Статус заказа — Хаб Коллекционера</title>
   <script src="/theme.js"></script>
-  <script src="/order.js" defer></script>
+  <script src="/captcha.js"></script>
+  <script src="/order.js" type="module"></script>
   <link rel="stylesheet" href="/theme.css">
 </head>
 <body>
@@ -42,7 +43,7 @@
       <details>
         <summary>Как восстановить доступ</summary>
         <p>Сохранённый код позволяет открыть статус на другом устройстве или после перезапуска сервера. Если вы обновите эту страницу, код нужно ввести снова: сайт не записывает его в хранилище браузера.</p>
-        <p>Коды для посетителей будут выдаваться при оформлении заказа после запуска услуги. Пока оформление, оплата и автоматический перенос закрыты.</p>
+        <p>Коды для посетителей будут выдаваться при оформлении заказа после запуска услуги. Пока оформление и оплата закрыты.</p>
       </details>
     </section>
 
@@ -57,10 +58,86 @@
       </dl>
       <p id="order-next" class="note"></p>
       <p class="note">Здесь только сведения о заказе. Файлы, фотографии и распознанные модели не хранятся вместе с ним.</p>
-      <p class="note">Оплата и запуск переноса для посетителей пока отключены.</p>
+      <p class="note">Оформление и оплата пока отключены. Для работы с переносом нужен уже оплаченный заказ.</p>
+    </section>
+
+    <section id="order-transfer" class="panel" aria-labelledby="order-transfer-title" hidden>
+      <span class="eyebrow">Перенос по заказу</span>
+      <h2 id="order-transfer-title">Добавьте исходник коллекции</h2>
+      <p id="order-source-help">CSV, XLSX, JSON или TXT до 8 МБ · до 300 непустых строк. Или вставьте текст до 200 000 символов.</p>
+      <p class="note">Мы не сохраняем файлы и коллекцию на диск. Обработка может идти до 15 минут; готовые модели доступны 10 минут. После перезапуска сервера исходник понадобится загрузить снова.</p>
+      <form id="order-source-form">
+        <fieldset id="order-source-fields">
+          <legend>Выберите один исходник</legend>
+          <label for="order-file">Файл коллекции<input id="order-file" type="file" accept=".csv,.xlsx,.json,.txt"></label>
+          <label for="order-text">Или текст коллекции<textarea id="order-text" maxlength="200000" rows="6" placeholder="Вставьте список моделей или сообщения из своих заметок"></textarea></label>
+        </fieldset>
+        <fieldset id="order-consent-fields">
+          <legend>Условия распознавания</legend>
+          <label class="checkbox"><input id="order-ai-consent" type="checkbox"> Я согласен на передачу данных коллекции внешней нейросети.</label>
+          <label class="checkbox"><input id="order-processing-consent" type="checkbox"><span>Я ознакомился с <a href="/processing" target="_blank" rel="noopener">условиями обработки данных</a>.</span></label>
+          <label id="order-switch-label" class="checkbox" hidden><input id="order-switch-consent" type="checkbox"><span id="order-switch-text"></span></label>
+          <details><summary>Подробнее об участниках обработки</summary><p id="order-owners"></p><p><a href="/processing#ai-details" target="_blank" rel="noopener">Сведения о внешних сервисах</a></p></details>
+          <button id="order-conditions-retry" type="button" class="secondary">Обновить условия</button>
+        </fieldset>
+        <div id="order-captcha"></div><p id="order-captcha-status" class="note" role="status"></p>
+        <div class="actions"><button id="order-captcha-retry" type="button" class="secondary">Повторить проверку</button><button id="order-start" type="submit" disabled>Распознать коллекцию</button></div>
+      </form>
+      <p id="order-transfer-status" role="status" aria-live="polite"></p>
+      <div id="order-job" class="job-card" hidden>
+        <h3 id="order-job-title"></h3>
+        <progress id="order-job-progress" aria-label="Ход распознавания"></progress>
+        <p id="order-job-detail"></p><p id="order-job-expiry" class="note"></p>
+        <div class="actions"><button id="order-refresh" type="button" class="secondary">Обновить состояние</button><button id="order-cancel" type="button" class="secondary">Остановить обработку</button><button id="order-preview" type="button" hidden>Просмотреть модели</button></div>
+      </div>
+      <p class="note">Обновление страницы или очистка кода не останавливают начатое распознавание. Для остановки используйте кнопку «Остановить обработку», для удаления готовых моделей — «Удалить результат».</p>
+      <section id="order-models" aria-labelledby="order-models-title" hidden>
+        <h3 id="order-models-title" tabindex="-1">Проверьте результат распознавания</h3>
+        <p id="order-model-count"></p><div id="order-warnings" class="help-panel"></div>
+        <details><summary>Сверка с исходными строками</summary><div id="order-audit" class="job-audit"></div></details>
+        <div id="order-model-list" class="order-model-list"></div>
+        <p class="note">Раскройте модель, чтобы проверить поля и исправить ошибки. Правки действуют в этой вкладке до истечения срока результата; после обновления страницы их нужно внести снова.</p>
+        <fieldset id="order-zip-options">
+          <legend>Настройки архива</legend>
+          <div class="grid">
+            <label>Валюта цен в исходнике<select id="order-currency"><option value="">Выберите валюту</option><option value="RUB">Рубли</option><option value="EUR">Евро → рубли по курсу ЦБ</option></select></label>
+            <label>Дата для моделей без даты покупки<input id="order-date" type="date" required></label>
+            <label>Категория для моделей без категории<input id="order-category" maxlength="100" placeholder="Без категории"></label>
+            <label>Масштаб для автомобилей без масштаба<select id="order-scale"><option value="">Оставить пустым</option><option value="1:64">1:64</option></select></label>
+          </div>
+          <p class="note">Заполненные даты, категории и масштабы сохранятся. Если даты покупки нет, в заметки добавится пояснение о дате переноса. Пустая цена станет 0 ₽ с пояснением.</p>
+          <div id="order-rate-box" hidden><button id="order-rate-refresh" class="secondary" type="button">Проверить курс ЦБ</button><p id="order-rate-status" role="status"></p></div>
+        </fieldset>
+        <fieldset id="order-zip-confirmations">
+          <legend>Проверка перед скачиванием</legend>
+          <label class="checkbox"><input id="order-confirm-audit" type="checkbox"> Я сверил исходные строки с моделями выше.</label>
+          <label class="checkbox"><input id="order-confirm-models" type="checkbox"> Я проверил все поля моделей и исправил ошибки.</label>
+          <label class="checkbox"><input id="order-confirm-warnings" type="checkbox"> Я проверил замечания распознавания.</label>
+        </fieldset>
+        <p id="order-zip-help" class="note"></p>
+        <div id="order-zip-captcha"></div><p id="order-zip-captcha-status" class="note" role="status"></p>
+        <div class="actions"><button id="order-zip-captcha-retry" class="secondary" type="button">Повторить проверку</button><button id="order-download" type="button" disabled>Скачать ZIP</button><button id="order-download-stop" type="button" class="secondary" hidden>Отменить скачивание</button></div>
+        <p class="note">Скачивание не завершает заказ. До истечения срока можно повторить его без нового распознавания. Если фотография недоступна, в архив попадёт изображение с предложением сделать фото.</p>
+        <section id="order-saved" class="help-panel" hidden aria-labelledby="order-saved-title">
+          <h4 id="order-saved-title">Сохраните архив перед завершением</h4>
+          <p id="order-download-result" role="status"></p>
+          <p>Убедитесь, что ZIP появился в загрузках устройства. После завершения распознанные модели будут удалены с сервера; повторное скачивание по этому заказу станет недоступно.</p>
+          <label class="checkbox"><input id="order-download-saved" type="checkbox"> ZIP сохранён на моём устройстве. Можно удалить результат и завершить заказ.</label>
+          <button id="order-finish" type="button" disabled>Завершить заказ</button>
+        </section>
+      </section>
     </section>
 
     <footer class="site-footer"><span>Хаб Коллекционера</span><div class="actions"><a class="action secondary" href="/automatic">← К автоматическому переносу</a><a class="action secondary" href="/processing">Обработка данных</a></div></footer>
   </main>
+  <dialog id="order-editor" class="model-editor" aria-labelledby="order-editor-title">
+    <div class="editor-header"><h2 id="order-editor-title">Модель</h2><button id="order-editor-close" type="button" class="secondary">Закрыть</button></div>
+    <p class="note editor-help">Цена остаётся в исходной валюте. Теги разделяйте запятыми; дату вводите в формате ГГГГ-ММ-ДД. Пустые поля заполняются по настройкам архива.</p>
+    <form id="order-editor-form" novalidate>
+      <fieldset id="order-editor-fields" class="grid"><legend class="visually-hidden">Поля модели</legend></fieldset>
+      <p id="order-editor-status" class="error" role="status"></p>
+      <div class="editor-actions"><button id="order-editor-save" type="submit">Сохранить правки</button><button id="order-editor-discard" type="button" class="secondary">Отмена</button></div>
+    </form>
+  </dialog>
 </body>
 </html>

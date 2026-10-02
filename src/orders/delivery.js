@@ -41,7 +41,7 @@ async function prepared(result) {
   return { parsed, mapping: suggestMapping(parsed.headers) };
 }
 
-// Internal only until verified payments, guest CAPTCHA and issuance are wired.
+// Payment and ownership are rechecked even when called from authenticated HTTP.
 // Receipts/fingerprints live in RAM; no ZIP, models, source or corrections are cached.
 export function createOrderDelivery({ orders, jobs, capacity = createArchiveCapacity(), now = Date.now,
   build = buildArchive, getRate = ({ signal }) => getEurRate(fetch, { signal }) } = {}) {
@@ -67,9 +67,11 @@ export function createOrderDelivery({ orders, jobs, capacity = createArchiveCapa
     }
     sweep(); return order;
   }
-  async function assemble(input, options, edits, fingerprint) {
+  async function assemble(input, options, edits, fingerprint, connectionSignal) {
     return jobs.withResult(owner(input.id), input.jobId, async ({ result, signal: resultSignal, expiresAt, assertReady }) => {
+      connectionSignal.throwIfAborted();
       const { parsed, mapping } = await prepared(result);
+      connectionSignal.throwIfAborted();
       try {
         const rows = reviewRows(parsed, mapping, edits);
         for (const row of rows) {
@@ -103,7 +105,24 @@ export function createOrderDelivery({ orders, jobs, capacity = createArchiveCapa
         receipts.set(input.jobId, { owner: owner(input.id), requestId: input.requestId, fingerprint, receipt, expiresAt, confirmed: false });
         return { archive: built.archive, failedPhotos: [...(built.failedPhotos ?? [])], receipt, expiresAt,
           orderCompleted: false };
-      }, { signal: AbortSignal.any([resultSignal, shutdown.signal]) });
+      }, { signal: AbortSignal.any([resultSignal, shutdown.signal, connectionSignal]) });
+    });
+  }
+  function joinBuild(entry, signal) {
+    if (signal?.aborted || entry.controller.signal.aborted) {
+      throw new DeliveryError('Скачивание остановлено. Дождитесь остановки сборки и повторите.', 409);
+    }
+    const subscriber = {};
+    entry.subscribers.add(subscriber);
+    return new Promise((resolve, reject) => {
+      const detach = () => { signal?.removeEventListener('abort', abort); entry.subscribers.delete(subscriber); };
+      const abort = () => {
+        detach();
+        if (!entry.finished && !entry.subscribers.size) entry.controller.abort();
+        reject(new DeliveryError('Скачивание остановлено. Повторите без нового распознавания.', 409));
+      };
+      signal?.addEventListener('abort', abort, { once: true });
+      entry.promise.then((value) => { detach(); resolve(value); }, (error) => { detach(); reject(error); });
     });
   }
   return {
@@ -117,13 +136,14 @@ export function createOrderDelivery({ orders, jobs, capacity = createArchiveCapa
           audit: structuredClone(result.audit) };
       });
     },
-    async build(input) {
+    async build(input, { signal } = {}) {
       fields(input, ['id', 'accessToken', 'jobId', 'requestId', 'confirmedAudit', 'confirmedModels', 'options', 'edits']);
       const identity = { id: input.id, accessToken: input.accessToken, jobId: input.jobId, requestId: input.requestId };
       await authorize(identity);
       jobs.get(owner(identity.id), identity.jobId);
       if (!UUID.test(identity.requestId ?? '')) throw new DeliveryError('Нужен номер запроса скачивания.');
       if (input.confirmedAudit !== true || input.confirmedModels !== true) throw new DeliveryError('Подтвердите сверку исходных строк и проверку всех полей моделей.');
+      if (signal?.aborted) throw new DeliveryError('Скачивание остановлено.', 409);
       const options = optionsOf(input.options);
       if (!Array.isArray(input.edits ?? [])) throw new DeliveryError('Проверьте исправления моделей.');
       const serialized = JSON.stringify(input.edits ?? []);
@@ -136,20 +156,22 @@ export function createOrderDelivery({ orders, jobs, capacity = createArchiveCapa
         if (running.owner !== owner(identity.id) || running.requestId !== identity.requestId || running.fingerprint !== fingerprint) {
           throw new DeliveryError('Уже собирается другой вариант архива. Дождитесь окончания.', 409);
         }
-        return running.promise;
+        return joinBuild(running, signal);
       }
       if (previous?.requestId === identity.requestId && previous.fingerprint !== fingerprint) {
         throw new DeliveryError('Номер запроса использован для другого варианта. Подтвердите правки с новым номером.', 409);
       }
-      const promise = assemble(identity, options, edits, fingerprint).catch((error) => {
+      const entry = { owner: owner(identity.id), requestId: identity.requestId, fingerprint,
+        controller: new AbortController(), subscribers: new Set(), finished: false };
+      const promise = assemble(identity, options, edits, fingerprint, entry.controller.signal).catch((error) => {
         if (error instanceof DeliveryError || error instanceof JobError || error instanceof OrderError || error instanceof ArchiveBusyError) throw error;
         if (closed) throw new DeliveryError('Сервис перезапускается. Повторите позже.', 503);
         if (error?.name === 'TimeoutError') throw new DeliveryError('Сборка превысила две минуты. Повторите скачивание без нового распознавания.', 504);
         throw new DeliveryError('Сборка остановлена или срок результата истёк. Проверьте заказ и повторите.', 409);
-      });
-      builds.set(identity.jobId, { owner: owner(identity.id), requestId: identity.requestId, fingerprint, promise });
-      try { return await promise; }
-      finally { builds.delete(identity.jobId); }
+      }).finally(() => { entry.finished = true; builds.delete(identity.jobId); });
+      entry.promise = promise;
+      builds.set(identity.jobId, entry);
+      return joinBuild(entry, signal);
     },
     async confirmSaved(input) {
       fields(input, ['id', 'accessToken', 'jobId', 'receipt', 'downloadSaved']);
