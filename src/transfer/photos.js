@@ -25,11 +25,12 @@ export async function placeholderPhoto() {
   return placeholderPromise;
 }
 
-export async function downloadHunt64Photo(value, fetchImpl = fetch) {
+export async function downloadHunt64Photo(value, fetchImpl = fetch, { signal } = {}) {
+  signal?.throwIfAborted();
   const url = validateHunt64PhotoUrl(value);
   const response = await fetchImpl(url, {
     redirect: 'error',
-    signal: AbortSignal.timeout(10_000),
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000),
     headers: { Accept: 'image/jpeg,image/png,image/webp' },
   });
   if (!response.ok) throw new Error(`Фото недоступно: HTTP ${response.status}`);
@@ -38,6 +39,7 @@ export async function downloadHunt64Photo(value, fetchImpl = fetch) {
   const chunks = [];
   let size = 0;
   for await (const chunk of response.body) {
+    signal?.throwIfAborted();
     size += chunk.byteLength;
     if (size > MAX_DOWNLOAD_BYTES) {
       await response.body.cancel().catch(() => {});
@@ -48,11 +50,13 @@ export async function downloadHunt64Photo(value, fetchImpl = fetch) {
   const source = Buffer.concat(chunks);
   const image = sharp(source, { limitInputPixels: 40_000_000, failOn: 'error' });
   const metadata = await image.metadata();
+  signal?.throwIfAborted();
   if (!['jpeg', 'png', 'webp'].includes(metadata.format)) {
     throw new Error('Формат фото должен быть JPG, PNG или WebP');
   }
   const result = await image.rotate().resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
     .flatten({ background: '#ffffff' }).jpeg({ quality: 78 }).toBuffer();
+  signal?.throwIfAborted();
   if (result.length > 12 * 1024 * 1024) throw new Error('Обработанное фото слишком большое');
   return result;
 }

@@ -34,7 +34,7 @@ export async function prepareSource({ filename, bytes }) {
 
 export function createRecognitionWorker(aiService) {
   return async ({ source, route, signal, progress, releaseSource = () => {} }) => {
-    const { records, chunks, numbering } = await prepareSource(source);
+    const { records, chunks, numbering } = source.prepared ?? await prepareSource(source);
     source = null;
     releaseSource();
     signal.throwIfAborted();

@@ -16,7 +16,7 @@
         <button id="logout" class="secondary" type="button">Выйти</button>
         <a class="header-link" href="/">← На главную</a>
       </div>
-      <nav class="site-nav" aria-label="Разделы панели"><a href="#job-form">Распознавание</a><a href="#jobs-title">Задания</a><a href="#keys">Ключи</a></nav>
+      <nav class="site-nav" aria-label="Разделы панели"><a href="#job-form">Распознавание</a><a href="#jobs-title">Задания</a><a href="#keys">Ключи</a><a href="#orders-title">Заказы</a></nav>
     </header>
     <section class="hero"><span class="eyebrow">Для администратора</span><h1>Панель управления</h1><p>Переносите тестовые коллекции и проверяйте результаты. Для первого запуска добавьте ключ в разделе ниже.</p></section>
     <details class="panel key-management"><summary>Ключи распознавания · OpenRouter</summary>
@@ -89,6 +89,17 @@
       </section>
     </section>
 
+    <details class="panel"><summary>Заказы автоматического переноса</summary>
+      <h2 id="orders-title">Учёт заказов</h2>
+      <p>Здесь сохраняются только номер, сумма и статусы заказа. Коллекции, файлы и фотографии в заказах не хранятся.</p>
+      <p class="note">Оплата пока не подключена. Можно создать черновик и проверить, что он остаётся после перезапуска сервера. Это не запускает ИИ и не списывает деньги.</p>
+      <div class="actions"><button id="order-create" type="button" disabled>Создать черновик · 149 ₽</button><button id="orders-refresh" type="button" class="secondary" disabled>Обновить заказы</button></div>
+      <p id="orders-message" role="status" aria-live="polite"></p>
+      <p id="orders-status" role="status" aria-live="polite">Список загрузится после входа.</p>
+      <div id="orders-list"></div>
+      <div class="actions"><button id="orders-previous" class="secondary" type="button" hidden>Предыдущие</button><button id="orders-next" class="secondary" type="button" hidden>Следующие</button></div>
+    </details>
+
     <details class="panel"><summary>Быстрая проверка короткого текста</summary>
     <form id="ai-form">
       <h2>Распознать свободный текст</h2>
@@ -110,5 +121,6 @@
   </main>
   <script src="/admin.js" defer></script>
   <script src="/admin-jobs.js" defer></script>
+  <script src="/admin-orders.js" defer></script>
 </body>
 </html>

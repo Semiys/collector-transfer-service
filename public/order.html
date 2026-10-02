@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="Проверка состояния заказа переноса коллекции">
+  <title>Статус заказа — Хаб Коллекционера</title>
+  <script src="/theme.js"></script>
+  <script src="/order.js" defer></script>
+  <link rel="stylesheet" href="/theme.css">
+</head>
+<body>
+  <main class="order-layout">
+    <header class="site-header">
+      <a class="site-brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span>Хаб Коллекционера<small>Перенос коллекций</small></span></a>
+      <div class="site-actions"><button class="theme-toggle" type="button" data-theme-toggle>Тема</button><a class="header-link" href="/admin">Вход</a></div>
+      <nav class="site-nav" aria-label="Разделы сайта"><a href="/#free-transfer">Перенос коллекции</a><a href="/automatic">Автоматически</a><a href="/order" aria-current="page">Мой заказ</a></nav>
+    </header>
+
+    <section class="hero">
+      <span class="eyebrow">Мой заказ</span>
+      <h1>Проверьте состояние переноса</h1>
+      <p>Если у вас есть код доступа, вставьте его ниже. Вход в аккаунт не нужен.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="order-access-title">
+      <h2 id="order-access-title">Открыть заказ по коду</h2>
+      <form id="order-form" method="post" action="/api/orders/status" autocomplete="off">
+        <label for="order-code">Код доступа к заказу
+          <input id="order-code" name="code" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="512" required aria-describedby="order-code-help" disabled>
+        </label>
+        <p id="order-code-help" class="note">Скопируйте полный код, начинающийся с CT1. Он открывает только ваш заказ. Не отправляйте его другим людям.</p>
+        <div class="actions">
+          <button id="order-check" type="submit" disabled>Проверить заказ</button>
+          <button id="order-show" type="button" class="secondary" aria-controls="order-code" aria-pressed="false" disabled>Показать код</button>
+          <button id="order-clear" type="button" class="secondary">Очистить</button>
+        </div>
+        <p id="order-status" role="status" aria-live="polite">Проверяю доступность…</p>
+        <button id="order-config-retry" class="secondary" type="button" hidden>Повторить подключение</button>
+      </form>
+      <details>
+        <summary>Как восстановить доступ</summary>
+        <p>Сохранённый код позволяет открыть статус на другом устройстве или после перезапуска сервера. Если вы обновите эту страницу, код нужно ввести снова: сайт не записывает его в хранилище браузера.</p>
+        <p>Коды для посетителей будут выдаваться при оформлении заказа после запуска услуги. Пока оформление, оплата и автоматический перенос закрыты.</p>
+      </details>
+    </section>
+
+    <section id="order-result" class="panel" aria-labelledby="order-result-title" hidden>
+      <h2 id="order-result-title" tabindex="-1">Состояние заказа</h2>
+      <p id="order-number" class="order-number"></p>
+      <dl class="order-summary">
+        <div><dt>Стоимость</dt><dd id="order-price"></dd></div>
+        <div><dt>Оплата</dt><dd id="order-payment"></dd></div>
+        <div><dt>Перенос</dt><dd id="order-processing"></dd></div>
+        <div><dt>Обновлён</dt><dd id="order-updated"></dd></div>
+      </dl>
+      <p id="order-next" class="note"></p>
+      <p class="note">Здесь только сведения о заказе. Файлы, фотографии и распознанные модели не хранятся вместе с ним.</p>
+      <p class="note">Оплата и запуск переноса для посетителей пока отключены.</p>
+    </section>
+
+    <footer class="site-footer"><span>Хаб Коллекционера</span><div class="actions"><a class="action secondary" href="/automatic">← К автоматическому переносу</a><a class="action secondary" href="/processing">Обработка данных</a></div></footer>
+  </main>
+</body>
+</html>

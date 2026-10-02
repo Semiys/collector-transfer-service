@@ -22,12 +22,12 @@ export function rateLimit({ max, windowMs, now = Date.now }) {
   };
 }
 
-export function concurrencyLimit(max) {
+export function concurrencyLimit(max, { message = 'Сервис обрабатывает другие архивы. Повторите через несколько секунд.' } = {}) {
   let active = 0;
   return (_request, response, next) => {
     if (active >= max) {
       response.set('Retry-After', '5');
-      response.status(503).json({ error: 'Сервис обрабатывает другие архивы. Повторите через несколько секунд.' });
+      response.status(503).json({ error: message });
       return;
     }
     active += 1;

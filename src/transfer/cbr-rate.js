@@ -19,14 +19,16 @@ export function parseEurRate(xml) {
   return { currency: 'EUR', rubPerEuro: value / nominal, date, source: CBR_URL };
 }
 
-export async function getEurRate(fetchImpl = fetch) {
+export async function getEurRate(fetchImpl = fetch, { signal } = {}) {
+  signal?.throwIfAborted();
   if (fetchImpl === fetch && cachedRate && cachedRate.expiresAt > Date.now()) return cachedRate.rate;
   const response = await fetchImpl(CBR_URL, {
-    signal: AbortSignal.timeout(8_000),
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(8_000)]) : AbortSignal.timeout(8_000),
     headers: { Accept: 'application/xml' },
   });
   if (!response.ok) throw new Error('ЦБ временно не отвечает. Попробуйте позже');
   const bytes = await response.arrayBuffer();
+  signal?.throwIfAborted();
   if (bytes.byteLength > 100_000) throw new Error('Ответ ЦБ слишком большой');
   const xml = new TextDecoder('windows-1251').decode(bytes);
   const rate = parseEurRate(xml);

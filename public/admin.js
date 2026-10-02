@@ -194,6 +194,7 @@ fetch('/api/admin/session', { cache: 'no-store', credentials: 'same-origin' })
   .then((session) => {
     if (!session) return;
     csrfToken = session.csrfToken;
+    document.dispatchEvent(new CustomEvent('collector-session'));
     return loadAccounts();
   })
   .catch((error) => showStatus(error.message, 'error'));

@@ -1,60 +1,27 @@
 import { zipSync, strToU8 } from 'fflate';
-import { mapRows, detectPriceCurrency } from './mapping.js';
+import { detectPriceCurrency } from './mapping.js';
+import { reviewRows, rowProblems, validDate, parsePrice, parseTags } from './review.js';
 import { downloadHunt64Photo, placeholderPhoto } from './photos.js';
 
 const MAX_MODELS = 300;
 const MAX_ARCHIVE_BYTES = 100 * 1024 * 1024;
 
-function validDate(value) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const date = new Date(`${value}T00:00:00.000Z`);
-  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
-}
-
-function parsePrice(value, row) {
-  const normalized = value.replace(/[\s\u00a0\u202f]/g, '').replace(',', '.');
-  if (!normalized) return null;
-  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) {
-    throw new Error(`Строка ${row}: неверная цена «${value}»`);
-  }
-  const number = Number(normalized);
-  if (!Number.isFinite(number) || number > 1_000_000_000) {
-    throw new Error(`Строка ${row}: цена слишком велика`);
-  }
-  return number;
-}
-
-function parseTags(value, row) {
-  if (!value) return [];
-  let entries;
-  if (value.startsWith('[')) {
-    try { entries = JSON.parse(value); }
-    catch { throw new Error(`Строка ${row}: теги должны быть списком строк`); }
-    if (!Array.isArray(entries)) throw new Error(`Строка ${row}: теги должны быть списком строк`);
-  } else entries = value.split(/[,;\n]/u);
-  if (entries.some((entry) => typeof entry !== 'string')) {
-    throw new Error(`Строка ${row}: каждый тег должен быть текстом`);
-  }
-  const tags = [...new Set(entries.map((entry) => entry.trim()).filter(Boolean))];
-  if (tags.length > 16 || tags.some((tag) => tag.length > 100)) {
-    throw new Error(`Строка ${row}: слишком много тегов или слишком длинный тег`);
-  }
-  return tags;
-}
-
 function isCarCategory(value) {
   return /^(автомобили|машинки|automotive|cars)$/iu.test(value);
 }
 
-export async function buildArchive({ parsed, mapping, options, eurRate, downloadPhoto = downloadHunt64Photo }) {
+export async function buildArchive({ parsed, mapping, options, edits = [], eurRate, signal,
+  downloadPhoto = (url, { signal } = {}) => downloadHunt64Photo(url, fetch, { signal }) }) {
+  signal?.throwIfAborted();
   if (parsed.warnings?.length && options.acceptTextWarnings !== true) {
     throw new Error('Проверьте непрочитанные строки текста и подтвердите перенос');
   }
-  for (const [field, header] of Object.entries(mapping)) {
-    if (header && !parsed.headers.includes(header)) throw new Error(`Неизвестный столбец для поля ${field}`);
-  }
-  const mapped = mapRows(parsed.rows, mapping);
+  const mapped = reviewRows(parsed, mapping, edits);
   if (mapped.length > MAX_MODELS) throw new Error(`За один раз можно перенести не более ${MAX_MODELS} моделей`);
+  for (const row of mapped) {
+    const errors = Object.values(rowProblems(row));
+    if (errors.length) throw new Error(`Строка ${row.sourceRow}: ${errors.join(' ')}`);
+  }
   const exportedAt = new Date().toISOString();
   const defaultCategory = String(options.defaultCategory ?? '').trim() || 'Без категории';
   const defaultScale = String(options.defaultScale ?? '').trim();
@@ -78,9 +45,11 @@ export async function buildArchive({ parsed, mapping, options, eurRate, download
   const files = {};
   const failedPhotos = [];
   const placeholder = await placeholderPhoto();
+  signal?.throwIfAborted();
   let totalPhotos = 0;
 
   for (let index = 0; index < mapped.length; index += 1) {
+    signal?.throwIfAborted();
     const row = mapped[index];
     if (!row.name || row.name.length > 200) {
       throw new Error(`Строка ${row.sourceRow}: название должно содержать от 1 до 200 символов`);
@@ -95,7 +64,7 @@ export async function buildArchive({ parsed, mapping, options, eurRate, download
       categories.push({ id, name: category, colorHex: null });
       categoryIds.set(category, id);
     }
-    const originalPrice = parsePrice(row.price, row.sourceRow);
+    const originalPrice = parsePrice(row.price);
     const price = originalPrice == null ? 0 :
       Math.round(originalPrice * (priceCurrency === 'EUR' ? eurRate.rubPerEuro : 1) * 100) / 100;
     const notes = [row.notes];
@@ -108,16 +77,18 @@ export async function buildArchive({ parsed, mapping, options, eurRate, download
 
     let photo = placeholder;
     if (row.photoUrl) {
-      try { photo = await downloadPhoto(row.photoUrl); }
+      try { photo = await downloadPhoto(row.photoUrl, { signal }); }
       catch {
+        signal?.throwIfAborted();
         failedPhotos.push(row.sourceRow);
         notes.push('Личное фото по ссылке не удалось загрузить; добавлена заглушка.');
       }
     } else notes.push('Личное фото отсутствовало в источнике; добавлена заглушка.');
+    signal?.throwIfAborted();
     totalPhotos += photo.length;
     if (totalPhotos > MAX_ARCHIVE_BYTES) throw new Error('Фотографии превышают лимит архива 100 МБ');
     const id = index + 1;
-    for (const tag of parseTags(row.tags, row.sourceRow)) {
+    for (const tag of parseTags(row.tags)) {
       if (!tagIds.has(tag)) {
         const tagId = tags.length + 1;
         tags.push({ id: tagId, name: tag });
@@ -139,7 +110,9 @@ export async function buildArchive({ parsed, mapping, options, eurRate, download
   const document = { formatVersion: 1, exportedAt, categories, models, tags, modelTags, config: null };
   files['collection.json'] = strToU8(JSON.stringify(document));
   if (files['collection.json'].length > 8 * 1024 * 1024) throw new Error('JSON превышает лимит приложения');
+  signal?.throwIfAborted();
   const archive = zipSync(files, { level: 0 });
+  signal?.throwIfAborted();
   if (archive.length > MAX_ARCHIVE_BYTES) throw new Error('ZIP превышает лимит сервиса 100 МБ');
   return { archive, document, failedPhotos };
 }

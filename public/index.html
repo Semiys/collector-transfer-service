@@ -116,7 +116,9 @@
       <p class="note">Если в источнике нет даты покупки, будет указана сегодняшняя дата переноса с пометкой в заметках. Дата добавления в Hunt64 не считается датой покупки.</p>
       <p id="rate" class="note"></p>
       <p class="note">Берём только столбец с личным фото. Сейчас ссылки Hunt64 поддерживаются автоматически; WebP преобразуется в JPG. Недоступное фото заменяется заглушкой с пометкой. Импорт в приложении добавляет модели, а не ищет дубликаты.</p>
-      <div class="scroll"><table><thead><tr><th>Название</th><th>Бренд</th><th>Масштаб</th><th>Категория</th><th>Теги</th><th>Цена</th><th>Дата покупки</th><th>Заметки</th><th>Ссылка на фото</th></tr></thead><tbody id="preview-rows"></tbody></table></div>
+      <p class="note">Нажмите «Изменить» у модели, чтобы исправить её поля. Исправления имеют приоритет над выбранными столбцами и сохраняются только до закрытия или обновления этой страницы.</p>
+      <p id="review-status" class="status" role="status" aria-live="polite"></p>
+      <div class="scroll"><table><thead><tr><th>Название</th><th>Бренд</th><th>Масштаб</th><th>Категория</th><th>Теги</th><th>Цена</th><th>Дата покупки</th><th>Заметки</th><th>Ссылка на фото</th><th>Действия</th></tr></thead><tbody id="preview-rows"></tbody></table></div>
       <label class="check review-confirm"><input id="confirm-preview" type="checkbox"> Я проверил названия, категории, теги, цены и даты в предпросмотре</label>
       <section class="panel captcha-panel" aria-labelledby="free-captcha-title">
         <h3 id="free-captcha-title">Проверка перед созданием архива</h3>
@@ -130,7 +132,18 @@
     </section>
     <footer class="site-footer"><span>Хаб Коллекционера · Для приложения «Дом Коллекционера»</span><a href="/processing">Обработка данных</a></footer>
   </main>
-  <script>
+  <dialog id="model-editor" class="model-editor" aria-labelledby="editor-title">
+    <form id="editor-form" novalidate>
+      <header class="editor-header"><div><span class="eyebrow">Проверка модели</span><h2 id="editor-title"></h2></div><button id="editor-cancel" type="button" class="secondary">Закрыть</button></header>
+      <p id="editor-currency" class="note"></p>
+      <details class="editor-help"><summary>Если данных нет</summary><p class="note">Пустая цена станет 0 ₽; пустая дата — датой переноса с пометкой. Без фото добавится заглушка. Ссылки на личные фото поддерживаются только для Hunt64. Теги вводите по одному с новой строки.</p></details>
+      <div id="editor-fields" class="grid"></div>
+      <p id="editor-status" class="status error" role="status" aria-live="polite"></p>
+      <div class="editor-actions"><button type="submit">Применить исправления</button><button id="editor-reset" type="button" class="secondary">Вернуть поля источника</button></div>
+    </form>
+  </dialog>
+  <script type="module">
+    import { reviewRows, rowProblems, parseTags, FIELD_LIMITS } from '/transfer/review.js';
     const fields = { name: 'Название модели', brand: 'Бренд', scale: 'Масштаб', category: 'Категория', tags: 'Теги', price: 'Цена покупки', purchaseDate: 'Дата покупки', notes: 'Заметки', photoUrl: 'Ссылка на личное фото' };
     const fileInput = document.getElementById('source-file');
     const textInput = document.getElementById('source-text');
@@ -146,6 +159,32 @@
     let selectedFile;
     let converting = false;
     let previewVersion = 0;
+    let edits = new Map();
+    let editorIndex = null;
+    let invalidRows = 0;
+    let convertingVersion = 0;
+    let rateVersion = 0;
+    const editor = document.getElementById('model-editor');
+    const editorForm = document.getElementById('editor-form');
+    const editorStatus = document.getElementById('editor-status');
+    const reviewStatus = document.getElementById('review-status');
+    const confirmPreview = document.getElementById('confirm-preview');
+    function setConverting(value) {
+      converting = value;
+      for (const control of document.querySelectorAll('#source-file, #source-text, #method-file, #method-text, #text-format, #parse-text, #parse-json, #mappings select, #currency, #category, #default-scale, #confirm-preview, #accept-warnings, #free-captcha-retry')) {
+        control.disabled = value;
+      }
+    }
+    function corrections() {
+      return [...edits].map(([rowIndex, values]) => ({ rowIndex, values }));
+    }
+    function updateDownload() {
+      download.disabled = converting || !preview || invalidRows > 0 || !captcha.token || !confirmPreview.checked;
+    }
+    function invalidateConfirmation() {
+      confirmPreview.checked = false;
+      captcha.reset(); setJourney('review'); updateDownload();
+    }
     function setJourney(step) {
       for (const name of ['source', 'review', 'result']) {
         const item = document.getElementById(`journey-${name}`);
@@ -160,7 +199,9 @@
       document.getElementById('text-source').hidden = method !== 'text';
       document.getElementById('method-file').setAttribute('aria-pressed', String(method === 'file'));
       document.getElementById('method-text').setAttribute('aria-pressed', String(method === 'text'));
-      review.classList.add('hidden'); preview = null; selectedFile = null;
+      review.classList.add('hidden'); preview = null; selectedFile = null; edits.clear();
+      document.getElementById('preview-rows').replaceChildren();
+      editor.close(); editorForm.reset(); editorIndex = null;
       download.disabled = true; captcha.reset(); setJourney('source'); showStatus('');
     }
     document.getElementById('method-file').addEventListener('click', () => setSourceMethod('file'));
@@ -176,7 +217,8 @@
     textFormat.addEventListener('change', updateTextFormat);
     const captcha = CollectorCaptcha.mount({ container: document.getElementById('free-captcha'),
       status: document.getElementById('free-captcha-status'), action: 'collection_zip',
-      onChange: (token) => { download.disabled = converting || !preview || !token; } });
+      onChange: updateDownload });
+    confirmPreview.addEventListener('change', updateDownload);
     document.getElementById('free-captcha-retry').addEventListener('click', () => {
       captcha.reset(); captcha.initialize();
     });
@@ -189,35 +231,131 @@
       return Object.fromEntries(Object.keys(fields).map((field) => [field, document.getElementById(`field-${field}`).value]));
     }
     function renderRows() {
-      const selected = mapping();
       const body = document.getElementById('preview-rows');
       body.replaceChildren();
-      for (const row of preview.rows) {
+      let rows;
+      invalidRows = 0;
+      try { rows = reviewRows(preview, mapping(), corrections()); }
+      catch (error) { invalidRows = 1; reviewStatus.className = 'status error'; reviewStatus.textContent = error.message; updateDownload(); return; }
+      rows.forEach((row, index) => {
+        const problems = rowProblems(row);
+        if (Object.keys(problems).length) invalidRows += 1;
         const tr = document.createElement('tr');
+        tr.classList.toggle('invalid-model', Object.keys(problems).length > 0);
         for (const field of Object.keys(fields)) {
           const td = document.createElement('td');
           td.dataset.label = fields[field];
-          let value = row[selected[field]] || '';
-          if (field === 'scale' && !value && /^(автомобили|машинки|automotive|cars)$/i.test(row[selected.category] || '')) {
+          let value = row[field];
+          if (field === 'category' && !value) value = document.getElementById('category').value.trim() || 'Без категории';
+          if (field === 'scale' && !value && /^(автомобили|машинки|automotive|cars)$/i.test(row.category || document.getElementById('category').value.trim())) {
             value = defaultScale.value;
           }
-          if (field === 'tags' && value.startsWith('[')) {
-            try { value = JSON.parse(value).join(', '); } catch { /* Показываем исходный текст для проверки. */ }
+          if (field === 'tags') {
+            try { value = parseTags(value).join(', '); } catch { /* Keep invalid input visible for correction. */ }
           }
+          if (field === 'price' && !value) value = '0 — цена не указана';
+          if (field === 'purchaseDate' && !value) value = 'Дата переноса — покупка не указана';
           td.textContent = value || '—';
+          if (problems[field]) {
+            const message = document.createElement('small'); message.className = 'field-problem'; message.textContent = problems[field]; td.append(message);
+          }
           tr.append(td);
         }
+        const actions = document.createElement('td'); actions.dataset.label = 'Действия'; actions.className = 'model-actions';
+        const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'secondary'; edit.textContent = 'Изменить';
+        edit.setAttribute('aria-label', `Изменить модель ${index + 1}`); edit.disabled = converting;
+        edit.addEventListener('click', () => openEditor(index)); actions.append(edit);
+        if (edits.has(index)) {
+          const marker = document.createElement('small'); marker.className = 'edited-marker'; marker.textContent = 'Исправлено'; actions.append(marker);
+        }
+        tr.append(actions);
         body.append(tr);
-      }
+      });
+      reviewStatus.className = `status ${invalidRows ? 'error' : ''}`;
+      reviewStatus.textContent = invalidRows ? `Исправьте модели с ошибками: ${invalidRows}. Архив пока недоступен.` :
+        `Исправлено моделей: ${edits.size}. Проверьте поля и подтвердите результат ниже.`;
+      updateDownload();
     }
+    function fillEditor(row) {
+      for (const field of Object.keys(fields)) {
+        let value = row[field];
+        if (field === 'tags') {
+          try { value = parseTags(value).join('\n'); } catch { /* Preserve invalid tags for correction. */ }
+        }
+        const input = document.getElementById(`edit-${field}`);
+        input.value = value; input.removeAttribute('aria-invalid');
+        document.getElementById(`error-${field}`).textContent = '';
+      }
+      editorStatus.textContent = '';
+    }
+    function openEditor(index) {
+      if (!preview || converting) return;
+      editorIndex = index;
+      document.getElementById('editor-title').textContent = `Модель ${index + 1}`;
+      document.getElementById('editor-currency').textContent = currency.value === 'EUR' ? 'Цена в евро. При сборке архива она пересчитается в рубли.' :
+        currency.value === 'RUB' ? 'Цена в рублях.' : 'Перед скачиванием выберите валюту для всей коллекции.';
+      editor.querySelector('details').open = false;
+      fillEditor(reviewRows(preview, mapping(), corrections())[index]);
+      editor.showModal(); document.getElementById('edit-name').focus({ preventScroll: true }); editor.scrollTop = 0;
+    }
+    for (const [field, text] of Object.entries(fields)) {
+      const label = document.createElement('label'); label.htmlFor = `edit-${field}`; label.textContent = text;
+      const input = document.createElement(['tags', 'notes'].includes(field) ? 'textarea' : 'input');
+      input.id = `edit-${field}`; input.name = field; input.maxLength = FIELD_LIMITS[field];
+      input.setAttribute('aria-label', text);
+      if (field === 'tags') input.placeholder = 'Каждый тег с новой строки';
+      if (field === 'purchaseDate') input.placeholder = 'ГГГГ-ММ-ДД';
+      if (field === 'scale') input.placeholder = '1:64';
+      if (field === 'price') input.inputMode = 'decimal';
+      if (field === 'photoUrl') input.inputMode = 'url';
+      const hint = document.createElement('small'); hint.id = `error-${field}`; hint.className = 'field-problem';
+      input.setAttribute('aria-describedby', hint.id); label.append(input, hint);
+      if (['tags', 'notes', 'photoUrl'].includes(field)) label.className = 'editor-wide';
+      document.getElementById('editor-fields').append(label);
+    }
+    document.getElementById('editor-cancel').addEventListener('click', () => editor.close());
+    editor.addEventListener('close', () => { editorForm.reset(); editorStatus.textContent = ''; editorIndex = null; });
+    document.getElementById('editor-reset').addEventListener('click', () => {
+      if (editorIndex !== null) fillEditor(reviewRows(preview, mapping())[editorIndex]);
+    });
+    editorForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (!preview || editorIndex === null || converting) return;
+      const values = Object.fromEntries(Object.keys(fields).map((field) => [field, document.getElementById(`edit-${field}`).value.trim()]));
+      // In the editor each line is one tag; a comma inside a tag is preserved.
+      if (!values.tags.startsWith('[')) values.tags = JSON.stringify(values.tags.split('\n').map((value) => value.trim()).filter(Boolean));
+      const problems = rowProblems(values);
+      for (const field of Object.keys(fields)) {
+        document.getElementById(`error-${field}`).textContent = problems[field] || '';
+        document.getElementById(`edit-${field}`).setAttribute('aria-invalid', String(!!problems[field]));
+      }
+      if (Object.keys(problems).length) {
+        editorStatus.textContent = 'Исправьте отмеченные поля.';
+        document.getElementById(`edit-${Object.keys(problems)[0]}`).focus(); return;
+      }
+      const original = reviewRows(preview, mapping())[editorIndex];
+      const changed = Object.fromEntries(Object.entries(values).filter(([field, value]) => {
+        if (field !== 'tags') return value !== original[field];
+        try { return JSON.stringify(parseTags(value)) !== JSON.stringify(parseTags(original.tags)); }
+        catch { return true; }
+      }));
+      const next = new Map(edits);
+      if (Object.keys(changed).length) next.set(editorIndex, changed); else next.delete(editorIndex);
+      try { reviewRows(preview, mapping(), [...next].map(([rowIndex, values]) => ({ rowIndex, values }))); }
+      catch (error) { editorStatus.textContent = error.message; return; }
+      edits = next; editor.close(); invalidateConfirmation(); renderRows();
+    });
     async function updateRate() {
+      const version = ++rateVersion;
+      const sourceVersion = previewVersion;
       eurRate = null;
       rate.textContent = '';
       if (currency.value !== 'EUR') return;
       rate.textContent = 'Получаю курс ЦБ…';
       try {
-        const response = await fetch('/api/rates/eur');
+        const response = await fetch('/api/rates/eur', { signal: AbortSignal.timeout(10000) });
         const data = await response.json();
+        if (version !== rateVersion || sourceVersion !== previewVersion || currency.value !== 'EUR') return;
         if (!response.ok) throw new Error(data.error);
         eurRate = data;
         rate.replaceChildren();
@@ -225,11 +363,15 @@
         const link = document.createElement('a');
         link.href = data.source; link.textContent = 'Источник: Банк России'; link.target = '_blank'; link.rel = 'noopener noreferrer';
         rate.append(link);
-      } catch (error) { rate.textContent = `Не удалось получить курс: ${error.message}`; }
+      } catch (error) {
+        if (version === rateVersion && sourceVersion === previewVersion && currency.value === 'EUR') rate.textContent = `Не удалось получить курс: ${error.message}`;
+      }
     }
 
     async function preparePreview(file) {
       const version = ++previewVersion;
+      edits.clear(); editor.close(); editorForm.reset(); editorIndex = null;
+      document.getElementById('preview-rows').replaceChildren();
       review.classList.add('hidden'); preview = null; eurRate = null;
       download.disabled = true; setJourney('source');
       captcha.reset();
@@ -264,6 +406,7 @@
           }
           select.value = data.mapping[field] || '';
           select.addEventListener('change', () => {
+            invalidateConfirmation();
             renderRows();
             if (field === 'price') {
               const header = select.value;
@@ -316,11 +459,12 @@
       const wrapped = { transferSource: 'manual-ai-v1', models, warnings: [] };
       preparePreview(new File([JSON.stringify(wrapped)], 'deepseek-result.json', { type: 'application/json' }));
     });
-    currency.addEventListener('change', updateRate);
-    defaultScale.addEventListener('change', () => { if (preview) renderRows(); });
+    currency.addEventListener('change', () => { invalidateConfirmation(); updateRate(); });
+    defaultScale.addEventListener('change', () => { if (preview) { invalidateConfirmation(); renderRows(); } });
+    document.getElementById('category').addEventListener('input', () => { if (preview) { invalidateConfirmation(); renderRows(); } });
 
     download.addEventListener('click', async () => {
-      if (!preview || converting) return;
+      if (!preview || converting || invalidRows) return;
       if (!mapping().name) { showStatus('Выберите столбец с названием модели.', 'error'); return; }
       if (!currency.value) { showStatus('Выберите валюту цены.', 'error'); return; }
       if (currency.value === 'EUR' && !eurRate) { showStatus('Дождитесь курса ЦБ.', 'error'); return; }
@@ -331,11 +475,12 @@
         showStatus('Проверьте неоднозначные строки и подтвердите перенос.', 'error'); return;
       }
       if (!captcha.token) { showStatus('Пройдите проверку, что вы человек.', 'error'); return; }
-      converting = true; download.disabled = true; showStatus('Собираю архив и загружаю личные фото…');
+      setConverting(true); convertingVersion = previewVersion; download.disabled = true; renderRows(); showStatus('Собираю архив и загружаю личные фото…');
       const form = new FormData();
       form.append('captchaToken', captcha.token);
       form.append('file', selectedFile);
       form.append('mapping', JSON.stringify(mapping()));
+      form.append('edits', JSON.stringify(corrections()));
       const now = new Date();
       const transferDate = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
       form.append('options', JSON.stringify({ priceCurrency: currency.value, defaultCategory: document.getElementById('category').value,
@@ -344,16 +489,18 @@
         acceptTextWarnings: !preview.warnings?.length || document.getElementById('accept-warnings').checked }));
       try {
         const response = await fetch('/api/convert', { method: 'POST', body: form });
+        if (convertingVersion !== previewVersion) return;
         if (!response.ok) { const data = await response.json(); throw new Error(data.error); }
         const blob = await response.blob();
+        if (convertingVersion !== previewVersion) return;
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'dom_collection_transfer.zip'; anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 60_000);
         const failed = response.headers.get('X-Photo-Failed-Rows');
         setJourney('result');
         showStatus(failed ? `ZIP готов. Фото не загрузились в строках: ${failed}; для них добавлены заглушки.` : 'ZIP готов к импорту в DomCollection.', 'success');
-      } catch (error) { showStatus(error.message, 'error'); }
-      finally { converting = false; captcha.reset(); }
+      } catch (error) { if (convertingVersion === previewVersion) showStatus(error.message, 'error'); }
+      finally { setConverting(false); captcha.reset(); if (preview) renderRows(); }
     });
   </script>
 </body>

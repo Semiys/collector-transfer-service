@@ -82,6 +82,17 @@ main { width: min(100% - 2rem, 72rem); margin: 0 auto; padding: 0 0 3rem; }
 .login-panel { max-width: 32rem; margin: 3rem auto 0; }
 .login-panel h1 { font-size: clamp(1.8rem, 4vw, 2.5rem); }
 .login-panel form { display: grid; gap: 1rem; }
+.order-layout { max-width: 54rem; }
+.order-layout .hero { padding-bottom: .5rem; }
+.order-layout form { display: grid; gap: .75rem; }
+.order-layout form p { margin: 0; }
+.order-layout details { margin-top: 1.25rem; }
+.order-number { overflow-wrap: anywhere; }
+.order-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.order-summary > div { padding: 1rem; border-radius: .65rem; background: var(--surface-muted); }
+.order-summary dt { color: var(--muted); font-size: .85rem; }
+.order-summary dd { margin: .4rem 0 0; font-weight: 600; overflow-wrap: anywhere; }
+@media (max-width: 560px) { .order-summary { grid-template-columns: 1fr; } }
 h1, h2, h3, button, .action, .site-brand { font-family: Montserrat, Inter, sans-serif; }
 h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.3rem); line-height: 1.14; }
 h2 { margin: 0 0 .75rem; font-size: clamp(1.25rem, 3vw, 1.65rem); }
@@ -153,7 +164,7 @@ pre { overflow-x: auto; padding: .8rem; background: var(--surface-muted); border
 details { margin-top: .7rem; padding: .8rem; border: 1px solid var(--border); border-radius: .6rem; }
 summary { cursor: pointer; font-weight: 700; }
 .account { border-top: 1px solid var(--border); padding: 1rem 0; }
-.account, .job-card { overflow-wrap: anywhere; }
+.account, .job-card, .order-card { overflow-wrap: anywhere; }
 .account:first-child { border-top: 0; }
 .account p { margin: .3rem 0; }
 .site-footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; margin-top: 2rem; padding: 1.5rem 0 0; border-top: 1px solid var(--border); color: var(--muted); font-size: .85rem; }
@@ -192,9 +203,27 @@ input[type='file']::file-selector-button { min-height: 2.5rem; margin-right: .75
 .download-bar button { flex-shrink: 0; }
 .captcha-panel > div { max-width: 100%; }
 .job-card { padding: 1rem 0; border-top: 1px solid var(--border); }
+.order-card { padding: 1rem 0; border-top: 1px solid var(--border); }
+.order-card p { margin: .4rem 0; }
 .job-card progress { width: 100%; accent-color: var(--accent); height: .7rem; }
 .job-audit { max-height: 24rem; overflow: auto; overflow-wrap: anywhere; }
 .job-audit p { padding: .5rem 0; border-bottom: 1px solid var(--border); white-space: pre-wrap; }
+.field-problem { display: block; margin-top: .35rem; color: var(--danger); font-size: .8rem; line-height: 1.45; font-weight: 400; }
+.field-problem:empty { display: none; }
+.invalid-model { border-left: 3px solid var(--danger); }
+.edited-marker { display: block; margin-top: .5rem; color: var(--accent-text); }
+.model-actions button { white-space: nowrap; }
+.model-editor { width: min(100% - 2rem, 46rem); max-width: none; max-height: calc(100dvh - 2rem); margin: auto; padding: 1.4rem; border: 1px solid var(--border); border-radius: .8rem; background: var(--surface); color: var(--text); overflow-y: auto; }
+.model-editor::backdrop { background: rgb(0 0 0 / .65); }
+body:has(.model-editor[open]) { overflow: hidden; }
+.editor-help { margin: 0 0 1rem; }
+.editor-header, .editor-actions { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+.editor-header h2 { margin: 0; }
+.editor-header .eyebrow { margin-bottom: .4rem; }
+.editor-wide { grid-column: 1 / -1; }
+.editor-actions { justify-content: flex-start; }
+.model-editor input[aria-invalid='true'], .model-editor textarea[aria-invalid='true'] { border-color: var(--danger); }
+td { overflow-wrap: anywhere; }
 
 @media (max-width: 700px) {
   main { width: min(100% - 1.2rem, 72rem); }
@@ -215,6 +244,8 @@ input[type='file']::file-selector-button { min-height: 2.5rem; margin-right: .75
   .scroll tr { margin-top: .7rem; padding: .8rem; border: 1px solid var(--border); border-radius: .7rem; background: var(--surface-muted); }
   .scroll td { display: grid; grid-template-columns: minmax(5rem, 35%) 1fr; gap: .6rem; overflow-wrap: anywhere; padding: .3rem 0; border: 0; }
   .scroll td::before { content: attr(data-label); font-weight: 700; }
+  .model-editor { width: calc(100% - 1.2rem); padding: 1rem; }
+  .editor-actions button { width: 100%; }
 }
 
 @media (max-width: 420px) {

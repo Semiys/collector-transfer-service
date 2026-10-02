@@ -9,15 +9,21 @@ import { buildArchive } from './transfer/build-archive.js';
 import { createAccountStore } from './admin/account-store.js';
 import { createAdminRouter } from './admin/routes.js';
 import { createAdminSession } from './admin/session.js';
-import { concurrencyLimit, rateLimit } from './http/limits.js';
+import { rateLimit } from './http/limits.js';
 import { CaptchaError, createTurnstile } from './http/captcha.js';
 import { createAutomaticRouter } from './automatic/routes.js';
 import { createAiService } from './ai/service.js';
 import { createJobStore } from './jobs/store.js';
 import { createRecognitionWorker } from './jobs/recognize.js';
 import { createAdminJobsRouter } from './admin/jobs-routes.js';
+import { createOrderStore } from './orders/store.js';
+import { createAdminOrdersRouter } from './admin/orders-routes.js';
+import { createOrderProcessing, createOrderJobLifecycle } from './orders/processing.js';
+import { createGuestOrdersRouter } from './orders/guest-routes.js';
+import { createOrderDelivery } from './orders/delivery.js';
+import { createArchiveCapacity } from './transfer/archive-capacity.js';
 
-export function createApp({ captcha, env = process.env, accountStore: suppliedStore, aiFetchImpl = fetch } = {}) {
+export function createApp({ captcha, env = process.env, accountStore: suppliedStore, orderStore: suppliedOrders, aiFetchImpl = fetch } = {}) {
   captcha ??= createTurnstile({ env });
   const app = express();
   app.disable('x-powered-by');
@@ -42,12 +48,21 @@ export function createApp({ captcha, env = process.env, accountStore: suppliedSt
   const adminAuth = createAdminSession({ adminCode: env.ADMIN_ACCESS_TOKEN,
     secureCookie: env.COOKIE_SECURE === 'true' });
   const aiService = createAiService({ store: accountStore, fetchImpl: aiFetchImpl });
-  const jobs = createJobStore({ run: createRecognitionWorker(aiService) });
+  const orderStore = suppliedOrders ?? (typeof env.ADMIN_ACCESS_TOKEN === 'string' && env.ADMIN_ACCESS_TOKEN.length >= 32 ?
+    createOrderStore({ dataDir }) : null);
+  const jobs = createJobStore({ run: createRecognitionWorker(aiService),
+    ...(orderStore ? createOrderJobLifecycle(orderStore) : {}) });
+  const orderProcessing = createOrderProcessing({ orders: orderStore, jobs, aiService });
+  const archiveCapacity = createArchiveCapacity();
+  const orderDelivery = createOrderDelivery({ orders: orderStore, jobs, capacity: archiveCapacity });
+  app.locals.orderProcessing = orderProcessing;
+  app.locals.orderDelivery = orderDelivery;
   app.locals.closeJobs = () => jobs.close();
+  app.locals.closeOrders = async () => { await orderDelivery.close(); await orderProcessing.close(); await jobs.close(); await orderStore?.close(); };
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 1 } });
   const previewLimit = rateLimit({ max: 30, windowMs: 60_000 });
   const convertLimit = rateLimit({ max: 8, windowMs: 60_000 });
-  const convertConcurrency = concurrencyLimit(2);
+  const convertConcurrency = archiveCapacity.middleware;
 
   app.get('/', (_request, response) => response.sendFile(pagePath));
   app.get('/guide', (_request, response) => response.sendFile(guidePagePath));
@@ -61,8 +76,20 @@ export function createApp({ captcha, env = process.env, accountStore: suppliedSt
     response.set('Cache-Control', 'no-store').json(captcha.publicConfig());
   });
   app.use('/api/automatic', createAutomaticRouter({ captcha, store: accountStore }));
+  const orderPageHeaders = (_request, response, next) => {
+    response.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'" });
+    next();
+  };
+  app.get('/order', orderPageHeaders, (_request, response) => response.sendFile(path.resolve(currentDirectory, '../public/order.html')));
+  app.get('/order.js', orderPageHeaders, (_request, response) => response.sendFile(path.resolve(currentDirectory, '../public/order.js')));
+  app.use('/api/orders', createGuestOrdersRouter({ orders: orderStore }));
   app.get('/theme.css', (_request, response) => response.sendFile(themeStylePath));
   app.get('/theme.js', (_request, response) => response.sendFile(themeScriptPath));
+  for (const module of ['mapping', 'review']) {
+    app.get(`/transfer/${module}.js`, (_request, response) =>
+      response.sendFile(path.resolve(currentDirectory, `transfer/${module}.js`)));
+  }
   app.use('/fonts', express.static(fontsPath, { immutable: true, maxAge: '1y' }));
   function adminHeaders(_request, response, next) {
     response.set({ 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
@@ -80,8 +107,11 @@ export function createApp({ captcha, env = process.env, accountStore: suppliedSt
   app.get('/admin.js', adminHeaders, adminAuth.requirePage, (_request, response) => response.sendFile(adminScriptPath));
   app.get('/admin-jobs.js', adminHeaders, adminAuth.requirePage, (_request, response) =>
     response.sendFile(path.resolve(currentDirectory, '../public/admin-jobs.js')));
+  app.get('/admin-orders.js', adminHeaders, adminAuth.requirePage, (_request, response) =>
+    response.sendFile(path.resolve(currentDirectory, '../public/admin-orders.js')));
   app.use('/api/admin/session', adminAuth.router);
   app.use('/api/admin/jobs', createAdminJobsRouter({ auth: adminAuth, aiService, jobs, enabled: !!accountStore }));
+  app.use('/api/admin/orders', createAdminOrdersRouter({ auth: adminAuth, store: orderStore, adminCode: env.ADMIN_ACCESS_TOKEN }));
   app.use('/api/admin', createAdminRouter({ store: accountStore, auth: adminAuth, aiService }));
 
   app.get('/api/rates/eur', async (_request, response) => {
@@ -107,18 +137,22 @@ export function createApp({ captcha, env = process.env, accountStore: suppliedSt
 
   app.post('/api/convert', convertLimit, convertConcurrency, upload.single('file'), async (request, response) => {
     try {
-      if (!request.file) throw new Error('Выберите файл коллекции');
-      await captcha.verify({ token: request.body.captchaToken, action: 'collection_zip',
-        hostname: request.hostname, ip: request.ip });
-      const parsed = await parseInput(request.file.originalname, request.file.buffer);
-      const mapping = JSON.parse(request.body.mapping ?? '{}');
-      const options = JSON.parse(request.body.options ?? '{}');
-      const eurRate = options.priceCurrency === 'EUR' ? await getEurRate() : null;
-      if (eurRate && options.expectedRateDate && options.expectedRateDate !== eurRate.date) {
-        response.status(409).json({ error: 'Курс ЦБ обновился. Обновите предпросмотр и повторите перенос.' });
-        return;
-      }
-      const result = await buildArchive({ parsed, mapping, options, eurRate });
+      const result = await response.locals.runArchiveTask(async (signal) => {
+        if (!request.file) throw new Error('Выберите файл коллекции');
+        await captcha.verify({ token: request.body.captchaToken, action: 'collection_zip',
+          hostname: request.hostname, ip: request.ip });
+        signal.throwIfAborted();
+        const parsed = await parseInput(request.file.originalname, request.file.buffer);
+        const mapping = JSON.parse(request.body.mapping ?? '{}');
+        const options = JSON.parse(request.body.options ?? '{}');
+        const edits = JSON.parse(request.body.edits ?? '[]');
+        const eurRate = options.priceCurrency === 'EUR' ? await getEurRate(fetch, { signal }) : null;
+        if (eurRate && options.expectedRateDate && options.expectedRateDate !== eurRate.date) {
+          throw Object.assign(new Error('Курс ЦБ обновился. Обновите предпросмотр и повторите перенос.'), { statusCode: 409 });
+        }
+        return buildArchive({ parsed, mapping, options, edits, eurRate, signal });
+      });
+      if (response.destroyed) return;
       response.set({
         'Content-Type': 'application/zip',
         'Content-Disposition': 'attachment; filename="dom_collection_transfer.zip"',
@@ -127,7 +161,9 @@ export function createApp({ captcha, env = process.env, accountStore: suppliedSt
       });
       response.send(Buffer.from(result.archive));
     } catch (error) {
-      response.status(error instanceof CaptchaError ? error.statusCode : 400).json({ error: error.message });
+      if (response.destroyed) return;
+      response.status(error instanceof CaptchaError ? error.statusCode : error.statusCode ?? (error.name === 'TimeoutError' ? 504 : 400))
+        .json({ error: error.name === 'TimeoutError' ? 'Сборка превысила две минуты. Повторите позже.' : error.message });
     }
   });
 
@@ -143,8 +179,18 @@ const app = createApp();
 export { app };
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number.parseInt(process.env.PORT ?? '8080', 10);
-  const server = app.listen(port, '0.0.0.0', () => {
+  const closeResources = () => {
+    void app.locals.closeOrders().catch(() => {
+      console.error('Collector transfer service could not close its state'); process.exitCode = 1;
+    });
+  };
+  const server = app.listen(port, '0.0.0.0', (error) => {
+    if (error) {
+      console.error('Collector transfer service could not start: ' + error.code);
+      closeResources(); process.exitCode = 1;
+      return;
+    }
     console.log('Collector transfer service is listening on port ' + port);
   });
-  server.once('close', app.locals.closeJobs);
+  server.once('close', closeResources);
 }
